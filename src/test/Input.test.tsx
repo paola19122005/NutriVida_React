@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import Input from "./Input";
+import Input from "../componentes/atomos/Input";
 
 describe("Input", () => {
   it("renderiza con props tipadas y valor", () => {
@@ -31,4 +31,5 @@ describe("Input", () => {
     const input = screen.getByDisplayValue("1234") as HTMLInputElement; expect(input.getAttribute("type")).toBe("password");
   });
 });
+
 

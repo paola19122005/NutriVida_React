@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dinero } from "./formato";
+import { dinero } from "../utils/formato";
 
 describe("formato", () => {
     it("formatea un número como moneda CLP", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {estadoPlan, fechaPasada, formatearFecha, mesesPlan} from "./fechas";
+import {estadoPlan, fechaPasada, formatearFecha, mesesPlan} from "../utils/fechas";
 
 describe("fechas", () => {
     it("calcula Por iniciar antes de la fecha de inicio", () => {

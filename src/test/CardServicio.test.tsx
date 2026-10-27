@@ -2,13 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import CardServicio from "./CardServicio";
+import CardServicio from "../componentes/moleculas/CardServicio";
 
-vi.mock("../../utils/lista", () => ({
+vi.mock("../utils/lista", () => ({
   agregarLista: vi.fn(),
 }));
 
-import { agregarLista } from "../../utils/lista";
+import { agregarLista } from "../utils/lista";
 
 describe("CardServicio", () => {
   const props = {
@@ -53,4 +53,5 @@ describe("CardServicio", () => {
     expect(screen.queryByText(/Selecciona la fecha/i)).not.toBeInTheDocument();
   });
 });
+
 

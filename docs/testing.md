@@ -12,7 +12,7 @@ Verificar la logica de validacion, fechas, formato, operaciones de lista y compo
 - jsdom 29.1.1
 
 ## Configuracion
-- `vite.config.ts` define `test.globals`, entorno `jsdom`, `setupFiles: ./src/test/setup.ts` y cobertura v8.
+- `vite.config.ts` define `test.globals`, entorno `jsdom`, `setupFiles: ./src/utils/setup.ts` y cobertura v8.
 - `src/test/setup.ts` importa `@testing-library/jest-dom/vitest`.
 - `tsconfig.app.json` incluye `src`.
 
