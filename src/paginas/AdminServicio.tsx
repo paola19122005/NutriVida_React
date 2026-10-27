@@ -53,7 +53,8 @@ export default function AdminServicios() {
     setIdProducto(p.id);
     setTipo(p.tipo);
     setNombre(p.nombre);
-    setDuracion(p.duracion && p.duracion !== "—" && !Number.isNaN(Number(p.duracion)) ? String(parseInt(p.duracion, 10)) : (p.duracion === "—" ? "" : p.duracion));
+    const duracionMatch = p.duracion?.match(/^(\d+)/);
+    setDuracion(duracionMatch ? duracionMatch[1] : (p.duracion === "—" ? "" : (p.duracion ?? "")));
     setModalidad(p.modalidad);
     setPrecio(String(p.precio));
     setImagen(p.imagen);

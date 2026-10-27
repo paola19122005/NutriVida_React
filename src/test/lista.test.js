@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import { agregarLista, obtenerEstadoServicio, obtenerLista, quitarLista, marcarServiciosPagados } from "./lista";
+import { agregarLista, obtenerEstadoServicio, obtenerLista, quitarLista, marcarServiciosPagados } from "../utils/lista";
 
 describe("lista", () => {
   beforeEach(() => {

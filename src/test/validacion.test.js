@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validarRut } from "./validacion";
+import { validarRut } from "../utils/validacion";
 
 describe("validarRut", () => {
   it("acepta un RUT válido sin formato", () => {
