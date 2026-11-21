@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fechaISO, fechaPasada } from "../../utils/fechas";
 
 interface SelectorFechaProps {
   onConfirmar: (fecha: string) => void;
@@ -30,19 +31,21 @@ export default function SelectorFecha({ onConfirmar, onCancelar }: SelectorFecha
           <input
             id="fechaServicio"
             type="date"
+            min={fechaISO()}
             value={fecha}
             onChange={(e) => setFecha(e.target.value)}
           />
+          {fecha && fechaPasada(fecha) ? <span className="error">No se permiten fechas anteriores al día actual.</span> : null}
         </div>
         <div className="actions" style={{ marginTop: "12px" }}>
           <button
             className="btn btn-primary"
             type="button"
             onClick={() => {
-              if (!fecha) return;
+              if (!fecha || fechaPasada(fecha)) return;
               onConfirmar(fecha);
             }}
-            disabled={!fecha}
+            disabled={!fecha || fechaPasada(fecha)}
           >
             Agregar
           </button>

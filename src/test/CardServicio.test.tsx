@@ -38,9 +38,9 @@ describe("CardServicio", () => {
     await user.click(screen.getByRole("button", { name: /Agregar a la lista/i }));
     expect(screen.getByText(/Selecciona la fecha/i)).toBeInTheDocument();
     const fecha = screen.getByLabelText(/Fecha del servicio/i) as HTMLInputElement;
-    await user.type(fecha, "2026-10-20");
+    await user.type(fecha, "2027-01-10");
     await user.click(screen.getByRole("button", { name: /^Agregar$/i }));
-    expect(agregarLista).toHaveBeenCalledWith("CN001", "2026-10-20");
+    expect(agregarLista).toHaveBeenCalledWith("CN001", "2027-01-10");
     expect(onAgregado).toHaveBeenCalled();
     expect(screen.queryByText(/Selecciona la fecha/i)).not.toBeInTheDocument();
   });

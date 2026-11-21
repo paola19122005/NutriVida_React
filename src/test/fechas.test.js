@@ -7,7 +7,7 @@ describe("fechas", () => {
     });
 
     it("calcula En proceso dentro de la duración", () => {
-        expect(estadoPlan("2026-10-01", 1)).toBe("En proceso");
+        expect(estadoPlan("2026-11-15", 1)).toBe("En proceso");
     });
 
     it("calcula Terminado al cumplir la duración", () => {

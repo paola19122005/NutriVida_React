@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { cargarProductos } from "../data/productos";
 import { dinero } from "../utils/formato";
 import { agregarLista } from "../utils/lista";
+import { fechaPasada } from "../utils/fechas";
 import { Toast } from "../utils/toast";
 import SelectorFecha from "../componentes/moleculas/SelectorFecha";
 
@@ -30,7 +31,7 @@ export default function DetalleServicio() {
   };
 
   const handleConfirmarFecha = (fecha: string) => {
-    if (!p) return;
+    if (!p || fechaPasada(fecha)) return;
     agregarLista(p.id, fecha);
     setMostrarFecha(false);
     setToast(true);

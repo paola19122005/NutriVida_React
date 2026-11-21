@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { obtenerSesion } from "../data/usuarios";
 import { cargarUsuarios } from "../data/usuarios";
-import { formatearFecha } from "../utils/fechas";
+import { formatearFecha, fechaPasada, fechaISO } from "../utils/fechas";
 
 interface Cita {
   id: number;
@@ -78,6 +78,7 @@ export default function EditarCitas() {
     let ok = true;
     if (!pacienteId) { nuevos.pacienteId = "Selecciona un paciente."; ok = false; }
     if (!fecha) { nuevos.fecha = "La fecha es obligatoria."; ok = false; }
+    else if (fechaPasada(fecha)) { nuevos.fecha = "No se permiten fechas anteriores al día actual."; ok = false; }
     if (!hora) { nuevos.hora = "La hora es obligatoria."; ok = false; }
     setErrores(nuevos);
     if (!ok) return;
@@ -148,7 +149,7 @@ export default function EditarCitas() {
               </div>
               <div className="form-group">
                 <label htmlFor="fecha">Fecha</label>
-                <input id="fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+                <input id="fecha" type="date" min={fechaISO()} value={fecha} onChange={(e) => setFecha(e.target.value)} />
                 <span className="error">{errores.fecha ?? ""}</span>
               </div>
               <div className="form-group">

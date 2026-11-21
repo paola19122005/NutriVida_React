@@ -4,7 +4,7 @@ import { obtenerSesion } from "../data/usuarios";
 import { cargarUsuarios } from "../data/usuarios";
 import { cargarProductos } from "../data/productos";
 
-import { fechaISO, formatearFecha, estadoPlan } from "../utils/fechas";
+import { fechaISO, formatearFecha, estadoPlan, fechaPasada } from "../utils/fechas";
 
 interface Revision {
   fecha: string;
@@ -99,8 +99,13 @@ export default function EditarPlan() {
     if (!pacienteId) { nuevos.pacienteId = "Selecciona un paciente."; ok = false; }
     if (!tipoPlan.trim()) { nuevos.tipoPlan = "Indica el plan."; ok = false; }
     if (!fechaInicio) { nuevos.fechaInicio = "La fecha de inicio es obligatoria."; ok = false; }
+    else if (fechaPasada(fechaInicio)) { nuevos.fechaInicio = "No se permiten fechas anteriores al día actual."; ok = false; }
     const meses = Number(duracionMeses);
     if (!duracionMeses || !Number.isInteger(meses) || meses < 1) { nuevos.duracionMeses = "Duración inválida."; ok = false; }
+    if (proximaRevision && fechaPasada(proximaRevision)) {
+      nuevos.proximaRevision = "No se permiten fechas anteriores al día actual.";
+      ok = false;
+    }
     setErrores(nuevos);
     if (!ok) return;
 
@@ -181,7 +186,7 @@ export default function EditarPlan() {
               </div>
               <div className="form-group">
                 <label htmlFor="fechaInicio">Fecha de inicio</label>
-                <input id="fechaInicio" type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+                <input id="fechaInicio" type="date" min={fechaISO()} value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
                 <span className="error">{errores.fechaInicio ?? ""}</span>
               </div>
               <div className="form-group">
@@ -199,7 +204,7 @@ export default function EditarPlan() {
               </div>
               <div className="form-group full">
                 <label htmlFor="proximaRevision">Próxima revisión</label>
-                <input id="proximaRevision" type="date" value={proximaRevision} onChange={(e) => setProximaRevision(e.target.value)} />
+                <input id="proximaRevision" type="date" min={fechaISO()} value={proximaRevision} onChange={(e) => setProximaRevision(e.target.value)} />
               </div>
               <div className="form-group full">
                 <label htmlFor="nuevaRevision">Nueva revisión / feedback</label>
