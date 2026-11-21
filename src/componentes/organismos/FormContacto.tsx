@@ -2,12 +2,14 @@ import { useState } from "react";
 import CampoFormulario from "../moleculas/CampoFormulario";
 import { validarCorreo, LIMITE_NOMBRE, LIMITE_CORREO, LIMITE_COMENTARIO } from "../../utils/validacion";
 import { Toast } from "../../utils/toast";
+import { agregarMensajeContacto } from "../../data/contactos";
 
 export default function FormContacto() {
   const [nombre, setNombre] = useState("");
   const [correo, setCorreo] = useState("");
+  const [asunto, setAsunto] = useState("");
   const [comentario, setComentario] = useState("");
-  const [errores, setErrores] = useState<{ nombre?: string; correo?: string; comentario?: string }>({});
+  const [errores, setErrores] = useState<{ nombre?: string; correo?: string; asunto?: string; comentario?: string }>({});
   const [mensaje, setMensaje] = useState("");
   const [toast, setToast] = useState(false);
 
@@ -20,12 +22,20 @@ export default function FormContacto() {
     if (!correo.trim()) { nuevos.correo = "El correo es obligatorio."; ok = false; }
     else if (correo.length > LIMITE_CORREO) { nuevos.correo = `Máximo ${LIMITE_CORREO} caracteres.`; ok = false; }
     else if (!validarCorreo(correo)) { nuevos.correo = "Ingresa un correo válido."; ok = false; }
+    if (asunto.length > LIMITE_NOMBRE) { nuevos.asunto = `Máximo ${LIMITE_NOMBRE} caracteres.`; ok = false; }
     if (!comentario.trim()) { nuevos.comentario = "El comentario es obligatorio."; ok = false; }
     else if (comentario.length > LIMITE_COMENTARIO) { nuevos.comentario = `Máximo ${LIMITE_COMENTARIO} caracteres.`; ok = false; }
     setErrores(nuevos);
     if (!ok) return;
+    agregarMensajeContacto({
+      remitente: nombre.trim(),
+      correo: correo.trim(),
+      asunto: asunto.trim() || "Sin asunto",
+      contenido: comentario.trim(),
+    });
     setNombre("");
     setCorreo("");
+    setAsunto("");
     setComentario("");
     setMensaje("Consulta enviada correctamente.");
     setToast(true);
@@ -40,6 +50,9 @@ export default function FormContacto() {
           </div>
           <div className="form-group full">
             <CampoFormulario etiqueta="Correo electrónico" nombre="correo" tipo="email" valor={correo} alCambiar={(v) => { setCorreo(v); setErrores((prev) => ({ ...prev, correo: undefined })); }} error={errores.correo} maxLength={LIMITE_CORREO} autoComplete="email" />
+          </div>
+          <div className="form-group full">
+            <CampoFormulario etiqueta="Asunto" nombre="asunto" tipo="text" valor={asunto} alCambiar={(v) => { setAsunto(v); setErrores((prev) => ({ ...prev, asunto: undefined })); }} error={errores.asunto} maxLength={LIMITE_NOMBRE} />
           </div>
           <div className="form-group full">
             <label htmlFor="comentario">Comentario</label>

@@ -72,6 +72,11 @@ export default function AdminDashboard() {
             <Link className="btn btn-primary" to="/admin/usuarios">Mantenedor</Link>
           </div>
           <div className="info-box">
+            <h2>Mensajes de contacto</h2>
+            <p className="muted">Consultar mensajes recibidos y su estado.</p>
+            <Link className="btn btn-primary" to="/admin/mensajes">Ver mensajes</Link>
+          </div>
+          <div className="info-box">
             <h2>Ver sitio público</h2>
             <p className="muted">Revisa cómo verá el contenido un paciente.</p>
             <Link className="btn btn-outline" to="/">Ir al sitio</Link>

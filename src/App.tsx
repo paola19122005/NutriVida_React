@@ -18,6 +18,7 @@ import Registro from "./paginas/Registro";
 import AdminDashboard from "./paginas/AdminDashboard";
 import AdminServicios from "./paginas/AdminServicio";
 import AdminUsuarios from "./paginas/AdminUsuarios";
+import AdminMensajesContacto from "./paginas/AdminMensajesContacto";
 
 function App() {
   return (
@@ -44,6 +45,9 @@ function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/servicios" element={<AdminServicios />} />
         <Route path="/admin/usuarios" element={<AdminUsuarios />} />
+        <Route path="/admin/mensajes" element={<AdminMensajesContacto />} />
+        <Route path="/admin/contacto" element={<AdminMensajesContacto />} />
+        <Route path="/admin/mensajes-contacto" element={<AdminMensajesContacto />} />
       </Routes>
       <Footer />
     </>
