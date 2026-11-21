@@ -52,7 +52,6 @@ export default function FormLogin() {
       </div>
       <p className="error" style={{ marginTop: "10px" }}>{errores.general ?? ""}</p>
       <button className="btn btn-primary" style={{ width: "100%", marginTop: "10px" }} type="submit">Ingresar</button>
-      <p className="hint" style={{ marginTop: "14px" }}>Demo: admin@nutrivida.cl / Admin1234 · nutricionista@nutrivida.cl / Nutri1234 · maria@nutrivida.cl / 1234</p>
       <p style={{ textAlign: "center", marginTop: "12px" }}>
         <Link to="/registro">¿No tienes cuenta? Regístrate</Link>
       </p>
