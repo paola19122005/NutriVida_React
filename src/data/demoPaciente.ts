@@ -1,5 +1,6 @@
 import { cargarUsuarios, guardarUsuarios } from "./usuarios";
 import { cargarServiciosPaciente, guardarServiciosPaciente } from "./serviciosPaciente";
+import { agregarPago, cargarPagos } from "./pagos";
 import type { ServicioPaciente } from "./serviciosPaciente";
 
 const PLANES_KEY = "planesNutricionista";
@@ -64,7 +65,7 @@ export function asegurarDemoPaciente() {
   const planExistente = planes.find((p) => p.id === planId);
   const planActualizado = {
     id: planId,
-    pacienteId: 1001,
+    pacienteId: pacienteId,
     pacienteNombre: "María González",
     tipoPlan: "Plan pérdida de peso (3 meses)",
     fechaInicio: "2026-09-10",
@@ -157,6 +158,8 @@ export function asegurarDemoPaciente() {
       fechaPago: "2026-09-09",
       nutricionista: "Carolina Fuentes",
       planId: planId,
+      metodoPago: "Transferencia bancaria",
+      numeroTransaccion: "TRX-9203DEMO",
       observaciones: "Plan activo con seguimiento quincenal.",
     },
     {
@@ -175,6 +178,20 @@ export function asegurarDemoPaciente() {
   const nuevos = base.filter((s) => !servicios.some((x) => x.id === s.id));
   if (nuevos.length) {
     guardarServiciosPaciente([...servicios, ...nuevos]);
+  }
+
+  const pagosExistentes = cargarPagos();
+  if (!pagosExistentes.some((p) => p.numeroTransaccion === "TRX-9203DEMO")) {
+    agregarPago({
+      pacienteId: pacienteId,
+      servicioIds: ["PL002"],
+      servicios: ["Plan pérdida de peso (3 meses)"],
+      fecha: "2026-09-09",
+      monto: 170000,
+      metodoPago: "Transferencia bancaria",
+      numeroTransaccion: "TRX-9203DEMO",
+      estado: "Pagado",
+    });
   }
 
   localStorage.setItem("demoPacienteNutriVida", "1");

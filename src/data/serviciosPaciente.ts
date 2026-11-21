@@ -16,6 +16,9 @@ export interface ServicioPaciente {
   tallerId?: number;
   citaId?: number;
   observaciones?: string;
+  metodoPago?: string;
+  numeroTransaccion?: string;
+  comprobante?: string;
 }
 
 const KEY = "serviciosPaciente";

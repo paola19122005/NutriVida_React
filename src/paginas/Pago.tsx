@@ -3,6 +3,9 @@ import { Link } from "react-router-dom";
 import { cargarProductos } from "../data/productos";
 import { dinero } from "../utils/formato";
 import { obtenerLista, marcarServiciosPagados, obtenerEstadoServicio } from "../utils/lista";
+import { obtenerSesion } from "../data/usuarios";
+import { cargarServiciosPaciente, guardarServiciosPaciente } from "../data/serviciosPaciente";
+import { agregarPago } from "../data/pagos";
 import { Toast } from "../utils/toast";
 import CampoFormulario from "../componentes/moleculas/CampoFormulario";
 
@@ -77,6 +80,55 @@ export default function Pago() {
     if (!validar()) return;
     if (pendientes.length === 0) return;
     marcarServiciosPagados(pendientes.map((p) => p.id));
+    const sesion = obtenerSesion();
+    const pacienteId = sesion?.id ?? 0;
+    // eslint-disable-next-line react-hooks/purity
+    const numeroTransaccion = "TRX-" + Date.now();
+    const metodoPago = "Tarjeta de crédito/débito";
+    const fechaPago = new Date().toISOString().slice(0, 10);
+    // Actualizar servicios del paciente
+    const servicios = cargarServiciosPaciente();
+    pendientes.forEach((p) => {
+      const idx = servicios.findIndex((s) => s.servicioId === p.id && (pacienteId ? s.pacienteId === pacienteId : true));
+      if (idx >= 0) {
+        servicios[idx] = {
+          ...servicios[idx],
+          estadoPago: "Pagado",
+          fechaPago,
+          metodoPago,
+          numeroTransaccion,
+        };
+      } else if (pacienteId) {
+        servicios.push({
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          pacienteId,
+          servicioId: p.id,
+          nombre: p.nombre,
+          tipo: p.tipo,
+          fecha: fechaPago,
+          estadoActividad: "Agendado",
+          estadoPago: "Pagado",
+          importe: p.precio,
+          fechaPago,
+          nutricionista: "Carolina Fuentes",
+          metodoPago,
+          numeroTransaccion,
+        });
+      }
+    });
+    guardarServiciosPaciente(servicios);
+
+    agregarPago({
+      pacienteId,
+      servicioIds: pendientes.map((p) => p.id),
+      servicios: pendientes.map((p) => p.nombre),
+      fecha: fechaPago,
+      monto: total,
+      metodoPago,
+      numeroTransaccion,
+      estado: "Pagado",
+    });
+
     setProcesando(true);
     window.setTimeout(() => {
       setProcesando(false);
