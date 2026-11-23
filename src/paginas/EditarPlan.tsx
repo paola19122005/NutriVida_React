@@ -45,7 +45,7 @@ export default function EditarPlan() {
   const navigate = useNavigate();
   const [planes, setPlanes] = useState<PlanNutricional[]>(() => cargarPlanes());
   const [pacientes] = useState(() => cargarUsuarios().filter((u) => u.rol === "Paciente"));
-  const [planesCatalogo] = useState(() => cargarProductos().filter((p) => ["PL001", "PL002", "PL004"].includes(p.id)));
+  const [planesCatalogo] = useState(() => cargarProductos().filter((p) => p.tipo === "Plan especializado"));
 
   const [editId, setEditId] = useState<number | null>(null);
   const [pacienteId, setPacienteId] = useState("");

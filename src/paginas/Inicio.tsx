@@ -1,12 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import CardServicio from "../componentes/moleculas/CardServicio";
 import { cargarProductos } from "../data/productos";
+import { listarServicios } from "../services/catalogoService";
 import { Toast } from "../utils/toast";
 
 export default function Inicio() {
-  const productos = cargarProductos().slice(0, 4);
+  const [productos, setProductos] = useState(() => cargarProductos().slice(0, 4));
   const [toast, setToast] = useState(false);
+
+  useEffect(() => {
+    listarServicios().then((data) => {
+      if (data && data.length) setProductos(data.slice(0, 4));
+    }).catch(() => {});
+  }, []);
 
   return (
     <>

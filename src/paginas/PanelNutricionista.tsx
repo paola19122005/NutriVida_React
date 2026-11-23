@@ -10,7 +10,7 @@ export default function PanelNutricionista() {
   const navigate = useNavigate();
   const [nombre] = useState(() => obtenerSesion()?.nombre ?? "Carolina");
   const [pacientes] = useState(() => cargarUsuarios().filter((u) => u.rol === "Paciente"));
-  const [planes] = useState(() => cargarProductos().filter((p) => ["PL001", "PL002", "PL004"].includes(p.id)));
+  const [planes] = useState(() => cargarProductos().filter((p) => p.tipo === "Plan especializado"));
 
   useEffect(() => {
     const u = obtenerSesion();
