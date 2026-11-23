@@ -2,12 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { cargarUsuarios, guardarUsuarios, obtenerSesion } from "../data/usuarios";
 import type { Usuario } from "../data/usuarios";
+import { listarUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario } from "../services/usuariosService";
 import { Toast } from "../utils/toast";
 import { validarCorreo, validarRut, normalizarRut, LIMITE_NOMBRE, LIMITE_APELLIDOS, LIMITE_CORREO } from "../utils/validacion";
 
 export default function AdminUsuarios() {
   const navigate = useNavigate();
   const [usuarios, setUsuarios] = useState<Usuario[]>(() => cargarUsuarios());
+
+  useEffect(() => {
+    listarUsuarios().then((data) => {
+      if (data && data.length) {
+        setUsuarios(data);
+        guardarUsuarios(data);
+      }
+    }).catch(() => {});
+  }, []);
   const [toast, setToast] = useState(false);
   const [toastMsg, setToastMsg] = useState("Usuario guardado.");
   const [busqueda, setBusqueda] = useState("");
@@ -18,6 +28,8 @@ export default function AdminUsuarios() {
   const [apellidos, setApellidos] = useState("");
   const [correo, setCorreo] = useState("");
   const [rol, setRol] = useState("Paciente");
+  const [clave, setClave] = useState("");
+  const [confirmarClave, setConfirmarClave] = useState("");
 
   const [errores, setErrores] = useState<Record<string, string | undefined>>({});
 
@@ -31,11 +43,17 @@ export default function AdminUsuarios() {
     );
   }, [usuarios, busqueda]);
 
-  const eliminarUsuario = (id: number) => {
+  const eliminarUsuarioHandler = async (id: number) => {
     if (!window.confirm("¿Eliminar este usuario?")) return;
-    const lista = cargarUsuarios().filter((u) => u.id !== id);
-    guardarUsuarios(lista);
-    setUsuarios(lista);
+    try {
+      await eliminarUsuario(id);
+      const data = await listarUsuarios();
+      setUsuarios(data);
+      guardarUsuarios(data);
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message || "No se pudo eliminar el usuario.");
+      alert(msg);
+    }
     setToastMsg("Usuario eliminado.");
     setToast(true);
   };
@@ -60,6 +78,8 @@ export default function AdminUsuarios() {
     setApellidos("");
     setCorreo("");
     setRol("Paciente");
+    setClave("");
+    setConfirmarClave("");
     setErrores({});
   };
 
@@ -75,7 +95,7 @@ export default function AdminUsuarios() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const guardar = (e: React.FormEvent) => {
+  const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
     const nuevosErrores: Record<string, string> = {};
     let ok = true;
@@ -102,6 +122,16 @@ export default function AdminUsuarios() {
 
     if (!rol) { nuevosErrores.rol = "Selecciona un rol."; ok = false; }
 
+    const creando = editingId === null;
+    if (creando) {
+      if (!clave) { nuevosErrores.clave = "La contraseña es obligatoria."; ok = false; }
+      else if (clave.length < 4 || clave.length > 10) { nuevosErrores.clave = "La contraseña debe tener entre 4 y 10 caracteres."; ok = false; }
+      if (clave !== confirmarClave) { nuevosErrores.confirmarClave = "Las contraseñas no coinciden."; ok = false; }
+    } else if (clave) {
+      if (clave.length < 4 || clave.length > 10) { nuevosErrores.clave = "La contraseña debe tener entre 4 y 10 caracteres."; ok = false; }
+      if (clave !== confirmarClave) { nuevosErrores.confirmarClave = "Las contraseñas no coinciden."; ok = false; }
+    }
+
     const listaActual = cargarUsuarios();
 
     if (ok && runLimpio) {
@@ -117,51 +147,68 @@ export default function AdminUsuarios() {
     if (!ok) return;
 
     if (editingId === null) {
-      const nuevo: Usuario = {
-        id: Date.now(),
-        run: runNorm,
-        nombre: nombreLimpio,
-        apellidos: apellidosLimpio,
-        correo: correoLimpio,
-        fechaNacimiento: "",
-        rol,
-        region: "",
-        comuna: "",
-        direccion: "",
-        clave: "1234",
-        activo: true,
-      };
-      const nuevaLista = [...listaActual, nuevo];
-      guardarUsuarios(nuevaLista);
-      setUsuarios(nuevaLista);
-      setToastMsg("Usuario guardado.");
+      try {
+        await crearUsuario({
+          run: runNorm,
+          nombre: nombreLimpio,
+          apellidos: apellidosLimpio,
+          correo: correoLimpio,
+          fechaNacimiento: "",
+          rol,
+          region: "",
+          comuna: "",
+          direccion: "",
+          clave,
+          activo: true,
+        });
+        const data = await listarUsuarios();
+        setUsuarios(data);
+        guardarUsuarios(data);
+        setToastMsg("Usuario guardado.");
+      } catch (e: unknown) {
+        const msg = String((e as { message?: string })?.message || "No se pudo guardar el usuario.");
+        alert(msg);
+        return;
+      }
     } else {
-      const idx = listaActual.findIndex((u) => u.id === editingId);
-      if (idx < 0) return;
-      listaActual[idx] = {
-        ...listaActual[idx],
-        run: runNorm,
-        nombre: nombreLimpio,
-        apellidos: apellidosLimpio,
-        correo: correoLimpio,
-        rol,
-      };
-      guardarUsuarios(listaActual);
-      setUsuarios(listaActual);
-      setToastMsg("Usuario actualizado.");
+      try {
+        await actualizarUsuario(editingId, {
+          run: runNorm,
+          nombre: nombreLimpio,
+          apellidos: apellidosLimpio,
+          correo: correoLimpio,
+          rol,
+          ...(clave ? { clave } : {}),
+        });
+        const data = await listarUsuarios();
+        setUsuarios(data);
+        guardarUsuarios(data);
+        setToastMsg("Usuario actualizado.");
+      } catch (e: unknown) {
+        const msg = String((e as { message?: string })?.message || "No se pudo actualizar el usuario.");
+        alert(msg);
+        return;
+      }
     }
 
     resetForm();
     setToast(true);
   };
 
-  const toggleUsuario = (id: number) => {
+  const toggleUsuario = async (id: number) => {
     const lista = cargarUsuarios();
     const u = lista.find((x) => x.id === id);
     if (!u) return;
-    u.activo = u.activo === false;
-    guardarUsuarios(lista);
-    setUsuarios(lista);
+    const nuevoActivo = u.activo === false;
+    try {
+      await actualizarUsuario(id, { activo: nuevoActivo });
+      const data = await listarUsuarios();
+      setUsuarios(data);
+      guardarUsuarios(data);
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message || "No se pudo actualizar el usuario.");
+      alert(msg);
+    }
   };
 
   return (
@@ -205,6 +252,16 @@ export default function AdminUsuarios() {
                   <option>Paciente</option>
                 </select>
                 <span className="error">{errores.rol ?? ""}</span>
+              </div>
+              <div className="form-group">
+                <label htmlFor="clave">Contraseña {editingId !== null ? "(opcional)" : ""}</label>
+                <input id="clave" name="clave" type="password" value={clave} onChange={(e) => { setClave(e.target.value); setErrores((prev) => ({ ...prev, clave: undefined })); }} minLength={4} maxLength={10} />
+                <span className="error">{errores.clave ?? ""}</span>
+              </div>
+              <div className="form-group">
+                <label htmlFor="confirmarClave">Confirmar contraseña</label>
+                <input id="confirmarClave" name="confirmarClave" type="password" value={confirmarClave} onChange={(e) => { setConfirmarClave(e.target.value); setErrores((prev) => ({ ...prev, confirmarClave: undefined })); }} minLength={4} maxLength={10} />
+                <span className="error">{errores.confirmarClave ?? ""}</span>
               </div>
               <div className="full">
                 <button className="btn btn-primary" type="submit">{editingId === null ? "Guardar usuario" : "Guardar edición"}</button>
@@ -257,7 +314,7 @@ export default function AdminUsuarios() {
                       <button className="btn btn-danger" onClick={() => toggleUsuario(u.id)}>
                         {u.activo === false ? "Activar" : "Desactivar"}
                       </button>{" "}
-                      <button className="btn btn-danger" onClick={() => eliminarUsuario(u.id)}>Eliminar</button>
+                        <button className="btn btn-danger" onClick={() => eliminarUsuarioHandler(u.id)}>Eliminar</button>
                     </td>
                   </tr>
                 ))}

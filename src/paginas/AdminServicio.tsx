@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { obtenerSesion } from "../data/usuarios";
 import { cargarProductos, guardarProductos } from "../data/productos";
 import type { Producto } from "../data/productos";
+import { listarServicios, crearServicio, actualizarServicio, eliminarServicio } from "../services/catalogoService";
 import { LIMITE_NOMBRE, LIMITE_COMENTARIO } from "../utils/validacion";
 import { Toast } from "../utils/toast";
 import { dinero } from "../utils/formato";
@@ -10,6 +11,15 @@ import { dinero } from "../utils/formato";
 export default function AdminServicios() {
   const navigate = useNavigate();
   const [productos, setProductos] = useState<Producto[]>(() => cargarProductos());
+
+  useEffect(() => {
+    listarServicios().then((data) => {
+      if (data && data.length) {
+        setProductos(data);
+        guardarProductos(data);
+      }
+    }).catch(() => {});
+  }, []);
   const [toast, setToast] = useState(false);
   const [toastMsg, setToastMsg] = useState("Servicio guardado.");
   const [errores, setErrores] = useState<Record<string, string | undefined>>({});
@@ -62,15 +72,26 @@ export default function AdminServicios() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const eliminarProducto = (id: string) => {
+  const [error, setError] = useState("");
+  const eliminarProducto = async (id: string) => {
     if (!confirm("¿Eliminar este servicio?")) return;
-    const nuevos = productos.filter((p) => p.id !== id);
-    guardarProductos(nuevos);
-    setProductos(nuevos);
+    setError("");
+    try {
+      await eliminarServicio(id);
+      const data = await listarServicios();
+      setProductos(data);
+      guardarProductos(data);
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message || "No se pudo eliminar el servicio.");
+      setError(msg);
+      setToastMsg(msg);
+      setToast(true);
+    }
   };
 
-  const guardar = (e: React.FormEvent) => {
+  const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("GUARDAR START", idProducto, modalidad, imagen);
     const nuevosErrores: Record<string, string> = {};
     let ok = true;
 
@@ -110,6 +131,16 @@ export default function AdminServicios() {
     setErrores(nuevosErrores);
     if (!ok) return;
 
+    // Validaciones de contrato backend
+    if (!modalidadLimpia) {
+      setErrores((prev) => ({ ...prev, modalidad: "La modalidad es obligatoria." }));
+      return;
+    }
+    if (!imagen.trim()) {
+      setErrores((prev) => ({ ...prev, imagen: "La imagen es obligatoria." }));
+      return;
+    }
+
     const obj: Producto = {
       id,
       tipo,
@@ -118,29 +149,54 @@ export default function AdminServicios() {
       modalidad: modalidadLimpia,
       precio: precioNumero,
       descripcion: descripcionLimpia,
-      imagen: imagen.trim() || "img/consulta.svg",
+      imagen: imagen.trim(),
     };
-    const idx = productos.findIndex((p) => p.id === obj.id);
-    let nuevos: Producto[];
-    if (idx >= 0) {
-      nuevos = [...productos];
-      nuevos[idx] = obj;
-    } else {
-      nuevos = [...productos, obj];
+
+    setError("");
+    try {
+      if (productos.some((p) => p.id === obj.id)) {
+        await actualizarServicio(obj.id, {
+          tipo: obj.tipo,
+          nombre: obj.nombre,
+          duracion: obj.duracion,
+          modalidad: obj.modalidad,
+          precio: obj.precio,
+          descripcion: obj.descripcion,
+          imagen: obj.imagen,
+        });
+      } else {
+        await crearServicio({
+          tipo: obj.tipo,
+          nombre: obj.nombre,
+          duracion: obj.duracion,
+          modalidad: obj.modalidad,
+          precio: obj.precio,
+          descripcion: obj.descripcion,
+          imagen: obj.imagen,
+        });
+      }
+      const data = await listarServicios();
+      console.log("GUARDAR OK", data.find((x: any) => x.id === obj.id)?.nombre);
+      setProductos(data);
+      guardarProductos(data);
+      setIdProducto("");
+      setTipo("Consulta");
+      setNombre("");
+      setDuracion("");
+      setModalidad("");
+      setPrecio("");
+      setImagen("");
+      setDescripcion("");
+      setErrores({});
+      setToastMsg("Servicio guardado.");
+      setToast(true);
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message || "No se pudo guardar el servicio.");
+      console.log("GUARDAR ERROR", msg);
+      setError(msg);
+      setToastMsg(msg);
+      setToast(true);
     }
-    guardarProductos(nuevos);
-    setProductos(nuevos);
-    setIdProducto("");
-    setTipo("Consulta");
-    setNombre("");
-    setDuracion("");
-    setModalidad("");
-    setPrecio("");
-    setImagen("");
-    setDescripcion("");
-    setErrores({});
-    setToastMsg("Servicio guardado.");
-    setToast(true);
   };
 
   return (
@@ -153,7 +209,8 @@ export default function AdminServicios() {
       </section>
       <section className="section">
         <div className="container">
-          <form onSubmit={guardar}>
+          {error ? <p className="error" style={{ marginBottom: "12px" }}>{error}</p> : null}
+          <form onSubmit={(e) => { console.log("SUBMIT"); guardar(e); }}>
             <div className="form-grid">
               <div className="form-group">
                 <label htmlFor="idProducto">Código</label>
@@ -198,7 +255,8 @@ export default function AdminServicios() {
               </div>
               <div className="form-group full">
                 <label htmlFor="imagen">Ruta de imagen</label>
-                <input id="imagen" name="imagen" value={imagen} onChange={(e) => setImagen(e.target.value)} placeholder="img/consulta.svg" />
+                <input id="imagen" name="imagen" value={imagen} onChange={(e) => { setImagen(e.target.value); setErrores((prev) => ({ ...prev, imagen: undefined })); }} placeholder="img/consulta.svg" />
+              <span className="error">{errores.imagen ?? ""}</span>
               </div>
               <div className="form-group full">
                 <label htmlFor="descripcion">Descripción</label>
@@ -206,7 +264,7 @@ export default function AdminServicios() {
                 <span className="error">{errores.descripcion ?? ""}</span>
               </div>
               <div className="full">
-                <button className="btn btn-primary" type="submit">Guardar servicio</button>
+                <button className="btn btn-primary" type="submit" onClick={(e) => { console.log("BUTTON CLICK", (e.target as HTMLButtonElement).form?.checkValidity()); }}>Guardar servicio</button>
               </div>
             </div>
           </form>
