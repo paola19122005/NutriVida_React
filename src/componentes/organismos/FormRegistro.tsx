@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import CampoFormulario from "../moleculas/CampoFormulario";
 import { validarCorreo, validarRut, normalizarRut, LIMITE_NOMBRE, LIMITE_APELLIDOS, LIMITE_CORREO, LIMITE_DIRECCION } from "../../utils/validacion";
 import { regiones } from "../../data/regiones";
-import { cargarUsuarios, guardarUsuarios } from "../../data/usuarios";
+// no local user persistence
+import { registerUsuario } from "../../services/authService";
 import { Toast } from "../../utils/toast";
 
 export default function FormRegistro() {
@@ -16,7 +17,7 @@ export default function FormRegistro() {
   const [region, setRegion] = useState("");
   const [comuna, setComuna] = useState("");
   const [direccion, setDireccion] = useState("");
-  const [clave, setClave] = useState("1234");
+  const [clave, setClave] = useState("");
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [mensaje, setMensaje] = useState("");
   const [toast, setToast] = useState(false);
@@ -28,7 +29,7 @@ export default function FormRegistro() {
     setComuna("");
   };
 
-  const enviar = (e: React.FormEvent) => {
+  const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
     const nuevos: Record<string, string> = {};
     let ok = true;
@@ -46,20 +47,11 @@ export default function FormRegistro() {
     if (!comuna) { nuevos.comuna = "Selecciona una comuna."; ok = false; }
     if (!direccion.trim()) { nuevos.direccion = "La dirección es obligatoria."; ok = false; }
     else if (direccion.length > LIMITE_DIRECCION) { nuevos.direccion = `Máximo ${LIMITE_DIRECCION} caracteres.`; ok = false; }
+    if (!clave) {nuevos.clave = "La contraseña es obligatoria.";ok = false;} else if (clave.length < 4 || clave.length > 10) {nuevos.clave = "La contraseña debe tener entre 4 y 10 caracteres.";ok = false;}
     setErrores(nuevos);
     if (!ok) return;
 
-    const usuarios = cargarUsuarios();
-    if (usuarios.some((u) => u.run === run.trim())) {
-      setErrores({ run: "Ese RUN ya está registrado." });
-      return;
-    }
-    if (usuarios.some((u) => u.correo.toLowerCase() === correo.toLowerCase())) {
-      setErrores({ correo: "Ese correo ya está registrado." });
-      return;
-    }
-    const nuevo = {
-      id: Date.now(),
+    const payload = {
       run: normalizarRut(run.trim()),
       nombre: nombre.trim(),
       apellidos: apellidos.trim(),
@@ -69,12 +61,20 @@ export default function FormRegistro() {
       region,
       comuna,
       direccion: direccion.trim(),
-      clave: clave || "1234",
+      clave,
       activo: true,
     };
-    usuarios.push(nuevo);
-    guardarUsuarios(usuarios);
-    setMensaje("Registro realizado correctamente. Ya puedes iniciar sesión.");
+
+    try {
+      await registerUsuario(payload);
+      setMensaje("Registro realizado correctamente. Ya puedes iniciar sesión.");
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message || "");
+      if (msg.toLowerCase().includes("run")) setErrores({ run: msg });
+      else if (msg.toLowerCase().includes("correo")) setErrores({ correo: msg });
+      else setErrores({ correo: msg || "No se pudo registrar. Intenta nuevamente." });
+      return;
+    }
     setRun("");
     setNombre("");
     setApellidos("");
@@ -84,7 +84,7 @@ export default function FormRegistro() {
     setRegion("");
     setComuna("");
     setDireccion("");
-    setClave("1234");
+    setClave("");
     setToast(true);
   };
 
@@ -135,7 +135,8 @@ export default function FormRegistro() {
           <div className="form-group">
             <label htmlFor="clave">Contraseña</label>
             <input id="clave" name="clave" type="password" minLength={4} maxLength={10} value={clave} onChange={(e) => setClave(e.target.value)} />
-            <span className="hint">Demo: 4 a 10 caracteres.</span>
+            <span className="error">{errores.clave ?? ""}</span>
+            <span className="hint">Debe tener entre 4 y 10 caracteres.</span>
           </div>
           <div className="full">
             <button className="btn btn-primary" type="submit">Registrarme</button>

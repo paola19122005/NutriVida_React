@@ -1,12 +1,14 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import FormRegistro from "../componentes/organismos/FormRegistro";
-import { cargarUsuarios } from "../data/usuarios";
 
 describe("FormRegistro", () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
 
   it("muestra error cuando el RUN es obligatorio", async () => {
     const user = userEvent.setup();
@@ -16,6 +18,7 @@ describe("FormRegistro", () => {
   });
 
   it("registra un usuario valido y muestra mensaje de exito", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ mensaje: "Registro exitoso", usuario: { id: 99, run: "11.111.111-1", nombre: "Juan", apellidos: "Perez", correo: "juan@test.cl", fechaNacimiento: "", rol: "Paciente", region: "Metropolitana de Santiago", comuna: "Santiago", direccion: "Calle 1", activo: true } }), { status: 200, headers: { "Content-Type": "application/json" } }));
     const user = userEvent.setup();
     render(<MemoryRouter><FormRegistro /></MemoryRouter>);
     await user.type(screen.getByLabelText(/^RUN$/i), "11.111.111-1");
@@ -27,7 +30,6 @@ describe("FormRegistro", () => {
     await user.selectOptions(screen.getByLabelText(/Comuna/i), "Santiago");
     await user.type(screen.getByLabelText(/Direcci/i), "Calle 1");
     await user.click(screen.getByRole("button", { name: /Registrarme/i }));
-    expect(screen.getByText("Registro realizado correctamente. Ya puedes iniciar sesi\u00f3n.")).toBeInTheDocument();
-    expect(cargarUsuarios().some((u) => u.correo === "juan@test.cl")).toBe(true);
+    await waitFor(() => expect(screen.getByText("Registro realizado correctamente. Ya puedes iniciar sesi\u00f3n.")).toBeInTheDocument());
   });
 });
