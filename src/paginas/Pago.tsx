@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { cargarProductos } from "../data/productos";
+import { listarServicios } from "../services/catalogoService";
 import { dinero } from "../utils/formato";
 import { obtenerLista, marcarServiciosPagados, obtenerEstadoServicio } from "../utils/lista";
 import { obtenerSesion } from "../data/usuarios";
@@ -11,7 +12,11 @@ import CampoFormulario from "../componentes/moleculas/CampoFormulario";
 
 export default function Pago() {
   const [ids] = useState<string[]>(obtenerLista());
-  const productos = cargarProductos();
+  const [productos, setProductos] = useState(() => cargarProductos());
+
+  useEffect(() => {
+    listarServicios().then((data) => { if (data && data.length) setProductos(data); }).catch(() => {});
+  }, []);
   const seleccionados = ids
     .map((id) => productos.find((p) => p.id === id))
     .filter((p): p is NonNullable<typeof p> => Boolean(p));
