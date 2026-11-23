@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { cargarProductos } from "../data/productos";
+import { obtenerServicio } from "../services/catalogoService";
 import { dinero } from "../utils/formato";
 import { agregarLista } from "../utils/lista";
 import { fechaPasada } from "../utils/fechas";
@@ -9,10 +10,14 @@ import SelectorFecha from "../componentes/moleculas/SelectorFecha";
 
 export default function DetalleServicio() {
   const { id } = useParams();
-  const productos = cargarProductos();
-  const p = productos.find((x) => x.id === id);
+  const [p, setP] = useState(() => (id ? cargarProductos().find((x) => x.id === id) ?? null : null));
   const [toast, setToast] = useState(false);
   const [mostrarFecha, setMostrarFecha] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    obtenerServicio(id).then((data) => { if (data) setP(data); }).catch(() => {});
+  }, [id]);
 
   if (!p) {
     return (

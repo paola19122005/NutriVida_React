@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { cargarProductos } from "../data/productos";
 import type { Producto } from "../data/productos";
+import { listarServicios } from "../services/catalogoService";
 import { dinero } from "../utils/formato";
 import { obtenerItemsLista, quitarLista, obtenerEstadoServicio } from "../utils/lista";
 import { fechaPasada, formatearFecha, estadoTaller, estadoPlan, mesesPlan } from "../utils/fechas";
@@ -11,7 +12,11 @@ export default function Lista() {
   const navigate = useNavigate();
   const [items, setItems] = useState(obtenerItemsLista());
   const [toast, setToast] = useState(false);
-  const productos = cargarProductos();
+  const [productos, setProductos] = useState<Producto[]>(() => cargarProductos());
+
+  useEffect(() => {
+    listarServicios().then((data) => { if (data && data.length) setProductos(data); }).catch(() => {});
+  }, []);
 
   const handleQuitar = (id: string) => {
     if (obtenerEstadoServicio(id) === "Pagado") return;
