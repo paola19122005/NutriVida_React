@@ -4,7 +4,9 @@ import { obtenerSesion } from "../data/usuarios";
 import { cargarUsuarios } from "../data/usuarios";
 import { cargarProductos } from "../data/productos";
 
-import { fechaISO, formatearFecha, estadoPlan, fechaPasada } from "../utils/fechas";
+import { fechaISO, formatearFecha, estadoPlan, fechaPasada, addMonths, parseFechaISO } from "../utils/fechas";
+import { planesPorNutricionista, crearPlan, actualizarPlan, registrarSeguimiento, listarSeguimientos } from "../services/atencionService";
+import type { BackendPlanNutricional, BackendSeguimiento } from "../services/atencionService";
 
 interface Revision {
   fecha: string;
@@ -13,6 +15,7 @@ interface Revision {
 
 interface PlanNutricional {
   id: number;
+  backendId?: number;
   pacienteId: number;
   pacienteNombre: string;
   tipoPlan: string;
@@ -59,11 +62,27 @@ export default function EditarPlan() {
   const [errores, setErrores] = useState<Record<string, string | undefined>>({});
   const [mensaje, setMensaje] = useState("");
 
+  const [planesReales, setPlanesReales] = useState<BackendPlanNutricional[]>([]);
+  const [seguimientosPorPlan, setSeguimientosPorPlan] = useState<Record<number, BackendSeguimiento[]>>({});
+  const [seguimientoPlanId, setSeguimientoPlanId] = useState("");
+  const [seguimientoComentario, setSeguimientoComentario] = useState("");
+  const [seguimientoProgreso, setSeguimientoProgreso] = useState("");
+  const [mensajeSeguimiento, setMensajeSeguimiento] = useState("");
+  const [cargandoPlanesReales, setCargandoPlanesReales] = useState(false);
+  const [errorPlanesReales, setErrorPlanesReales] = useState("");
+
   useEffect(() => {
     const u = obtenerSesion();
     if (!u || u.rol !== "Nutricionista") {
       navigate("/login");
+      return;
     }
+    setCargandoPlanesReales(true);
+    setErrorPlanesReales("");
+    planesPorNutricionista(u.id)
+      .then(setPlanesReales)
+      .catch(() => setErrorPlanesReales("No se pudo conectar con Atención Nutricional."))
+      .finally(() => setCargandoPlanesReales(false));
   }, [navigate]);
 
   const resetForm = () => {
@@ -92,7 +111,7 @@ export default function EditarPlan() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const guardar = (e: React.FormEvent) => {
+  const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
     const nuevos: Record<string, string> = {};
     let ok = true;
@@ -110,36 +129,96 @@ export default function EditarPlan() {
     if (!ok) return;
 
     const paciente = pacientes.find((p) => p.id === Number(pacienteId));
-    const plan: PlanNutricional = {
-      id: editId ?? Date.now(),
+    const existente = editId ? planes.find((p) => p.id === editId) : undefined;
+    const fechaTermino = fechaISO(addMonths(parseFechaISO(fechaInicio), meses));
+    const payload = {
+      nombre: tipoPlan.trim(),
+      descripcion: [objetivos.trim(), observaciones.trim()].filter(Boolean).join(" | "),
       pacienteId: Number(pacienteId),
-      pacienteNombre: paciente ? `${paciente.nombre} ${paciente.apellidos}` : "Paciente",
-      tipoPlan: tipoPlan.trim(),
+      nutricionistaId: obtenerSesion()?.id,
       fechaInicio,
-      duracionMeses: meses,
-      objetivos: objetivos.trim(),
-      observaciones: observaciones.trim(),
-      proximaRevision: proximaRevision.trim(),
-      revisiones: editId ? (planes.find((p) => p.id === editId)?.revisiones ?? []) : [],
+      fechaTermino,
     };
 
-    if (nuevaRevision.trim()) {
-      plan.revisiones = [...plan.revisiones, { fecha: fechaISO(), nota: nuevaRevision.trim() }];
-    }
+    try {
+      let backendId = existente?.backendId;
+      if (backendId) {
+        await actualizarPlan(backendId, payload);
+      } else {
+        const creado = await crearPlan(payload);
+        backendId = creado.id;
+      }
 
-    const lista = cargarPlanes();
-    if (editId === null) {
-      lista.push(plan);
-    } else {
-      const idx = lista.findIndex((p) => p.id === editId);
-      if (idx >= 0) lista[idx] = plan;
+      const plan: PlanNutricional = {
+        id: editId ?? Date.now(),
+        backendId,
+        pacienteId: Number(pacienteId),
+        pacienteNombre: paciente ? `${paciente.nombre} ${paciente.apellidos}` : "Paciente",
+        tipoPlan: tipoPlan.trim(),
+        fechaInicio,
+        duracionMeses: meses,
+        objetivos: objetivos.trim(),
+        observaciones: observaciones.trim(),
+        proximaRevision: proximaRevision.trim(),
+        revisiones: editId ? (planes.find((p) => p.id === editId)?.revisiones ?? []) : [],
+      };
+
+      if (nuevaRevision.trim()) {
+        plan.revisiones = [...plan.revisiones, { fecha: fechaISO(), nota: nuevaRevision.trim() }];
+      }
+
+      const lista = cargarPlanes();
+      if (editId === null) {
+        lista.push(plan);
+      } else {
+        const idx = lista.findIndex((p) => p.id === editId);
+        if (idx >= 0) lista[idx] = plan;
+      }
+      guardarPlanes(lista);
+      setPlanes(lista);
+      setMensaje(editId === null ? "Plan guardado correctamente." : "Plan actualizado correctamente.");
+      resetForm();
+    } catch {
+      setMensaje("No se pudo guardar el plan en Atención Nutricional.");
     }
-    guardarPlanes(lista);
-    setPlanes(lista);
-    setMensaje(editId === null ? "Plan guardado correctamente." : "Plan actualizado correctamente.");
-    resetForm();
   };
 
+  const cargarSeguimientos = async (planId: number) => {
+    try {
+      const data = await listarSeguimientos(planId);
+      setSeguimientosPorPlan((prev) => ({ ...prev, [planId]: data }));
+    } catch {
+      setMensajeSeguimiento("No se pudieron cargar los seguimientos.");
+    }
+  };
+
+  const guardarSeguimiento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const planId = Number(seguimientoPlanId);
+    if (!planId) {
+      setMensajeSeguimiento("Selecciona un plan.");
+      return;
+    }
+    const comentario = seguimientoComentario.trim();
+    if (!comentario) {
+      setMensajeSeguimiento("El comentario es obligatorio.");
+      return;
+    }
+    const progreso = Number(seguimientoProgreso);
+    if (Number.isNaN(progreso) || progreso < 0 || progreso > 100) {
+      setMensajeSeguimiento("El progreso debe estar entre 0 y 100.");
+      return;
+    }
+    try {
+      await registrarSeguimiento(planId, comentario, progreso);
+      setSeguimientoComentario("");
+      setSeguimientoProgreso("");
+      setMensajeSeguimiento("Seguimiento registrado correctamente.");
+      await cargarSeguimientos(planId);
+    } catch {
+      setMensajeSeguimiento("No se pudo registrar el seguimiento.");
+    }
+  };
   const agregarRevision = (planId: number) => {
     const nota = window.prompt("Ingresa el feedback de la revisión:");
     if (!nota || !nota.trim()) return;
@@ -257,6 +336,89 @@ export default function EditarPlan() {
                       <button className="btn btn-outline" type="button" onClick={() => editar(plan)}>Editar</button>
                       <button className="btn btn-primary" type="button" onClick={() => agregarRevision(plan.id)}>Agregar revisión</button>
                     </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+      <section className="section">
+        <div className="container">
+          <div className="section-title">
+            <h2>Seguimientos nutricionales</h2>
+            <p>Registrar observaciones y progreso en MySQL.</p>
+          </div>
+          <form onSubmit={guardarSeguimiento}>
+            <div className="form-grid">
+              <div className="form-group">
+                <label htmlFor="segPlan">Plan</label>
+                <select id="segPlan" value={seguimientoPlanId} onChange={(e) => setSeguimientoPlanId(e.target.value)}>
+                  <option value="">Seleccionar</option>
+                  {planesReales.map((p) => (
+                    <option key={p.id} value={p.id}>{p.nombre} (Paciente {p.pacienteId})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label htmlFor="segProgreso">Progreso (%)</label>
+                <input id="segProgreso" type="number" min={0} max={100} value={seguimientoProgreso} onChange={(e) => setSeguimientoProgreso(e.target.value)} />
+              </div>
+              <div className="form-group full">
+                <label htmlFor="segComentario">Comentario</label>
+                <textarea id="segComentario" value={seguimientoComentario} onChange={(e) => setSeguimientoComentario(e.target.value)} />
+              </div>
+              <div className="full">
+                <button className="btn btn-primary" type="submit">Registrar seguimiento</button>
+                {mensajeSeguimiento ? <p className="success">{mensajeSeguimiento}</p> : null}
+              </div>
+            </div>
+          </form>
+
+          {planesReales.map((p) => (
+            <div key={p.id} style={{ marginTop: "16px" }}>
+              <button className="btn btn-outline" type="button" onClick={() => void cargarSeguimientos(p.id)}>
+                Ver seguimientos de {p.nombre}
+              </button>
+              {seguimientosPorPlan[p.id] ? (
+                seguimientosPorPlan[p.id].length === 0 ? (
+                  <p className="muted">Sin seguimientos.</p>
+                ) : (
+                  <ul className="list-clean">
+                    {seguimientosPorPlan[p.id].map((s) => (
+                      <li key={s.id} className="muted">{s.fechaRegistro}: {s.comentario} ({s.progreso}%)</li>
+                    ))}
+                  </ul>
+                )
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="container">
+          <div className="section-title">
+            <h2>Planes reales de Atención Nutricional</h2>
+            <p>Listado obtenido del backend.</p>
+          </div>
+          {cargandoPlanesReales ? (
+            <div className="empty">Cargando planes...</div>
+          ) : errorPlanesReales ? (
+            <div className="empty">{errorPlanesReales}</div>
+          ) : planesReales.length === 0 ? (
+            <div className="empty">No hay planes reales registrados.</div>
+          ) : (
+            <div className="grid-3">
+              {planesReales.map((p) => (
+                <article className="card" key={p.id}>
+                  <div className="card-body">
+                    <h3>{p.nombre}</h3>
+                    <p className="muted">Paciente ID: {p.pacienteId}</p>
+                    <p className="muted">Estado: {p.estado}</p>
+                    <p className="muted">Progreso: {p.progreso}%</p>
+                    <p className="muted">Inicio: {p.fechaInicio}</p>
+                    <p className="muted">Término: {p.fechaTermino}</p>
                   </div>
                 </article>
               ))}

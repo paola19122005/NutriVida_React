@@ -3,9 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { obtenerSesion } from "../data/usuarios";
 import { cargarUsuarios } from "../data/usuarios";
 import { formatearFecha, fechaPasada, fechaISO } from "../utils/fechas";
+import { citasPorNutricionista, agendarCita, modificarCita, cancelarCita as cancelarCitaBackend, marcarCitaRealizada } from "../services/atencionService";
+import type { BackendCita } from "../services/atencionService";
 
 interface Cita {
   id: number;
+  backendId?: number;
   pacienteId: number;
   pacienteNombre: string;
   fecha: string;
@@ -45,11 +48,22 @@ export default function EditarCitas() {
   const [errores, setErrores] = useState<Record<string, string | undefined>>({});
   const [mensaje, setMensaje] = useState("");
 
+  const [citasReales, setCitasReales] = useState<BackendCita[]>([]);
+  const [cargandoCitasReales, setCargandoCitasReales] = useState(false);
+  const [errorCitasReales, setErrorCitasReales] = useState("");
+
   useEffect(() => {
     const u = obtenerSesion();
     if (!u || u.rol !== "Nutricionista") {
       navigate("/login");
+      return;
     }
+    setCargandoCitasReales(true);
+    setErrorCitasReales("");
+    citasPorNutricionista(u.id)
+      .then(setCitasReales)
+      .catch(() => setErrorCitasReales("No se pudo conectar con Atención Nutricional."))
+      .finally(() => setCargandoCitasReales(false));
   }, [navigate]);
 
   const resetForm = () => {
@@ -72,7 +86,7 @@ export default function EditarCitas() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const guardar = (e: React.FormEvent) => {
+  const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
     const nuevos: Record<string, string> = {};
     let ok = true;
@@ -93,32 +107,77 @@ export default function EditarCitas() {
     }
 
     const paciente = pacientes.find((p) => p.id === Number(pacienteId));
-    const cita: Cita = {
-      id: editId ?? Date.now(),
+    const existente = editId ? lista.find((c) => c.id === editId) : undefined;
+    const fechaHora = `${fecha}T${hora.length === 5 ? hora + ":00" : hora}`;
+    const payload = {
       pacienteId: Number(pacienteId),
-      pacienteNombre: paciente ? `${paciente.nombre} ${paciente.apellidos}` : "Paciente",
-      fecha,
-      hora,
-      estado,
+      nutricionistaId: obtenerSesion()?.id,
+      fechaHora,
+      motivo: "Cita nutricional",
       observaciones: observaciones.trim(),
     };
 
-    if (editId === null) {
-      lista.push(cita);
-    } else {
-      const idx = lista.findIndex((c) => c.id === editId);
-      if (idx >= 0) lista[idx] = cita;
+    try {
+      let backendId = existente?.backendId;
+      if (backendId) {
+        await modificarCita(backendId, payload);
+      } else {
+        const creada = await agendarCita(payload);
+        backendId = creada.id;
+      }
+
+      const cita: Cita = {
+        id: editId ?? Date.now(),
+        backendId,
+        pacienteId: Number(pacienteId),
+        pacienteNombre: paciente ? `${paciente.nombre} ${paciente.apellidos}` : "Paciente",
+        fecha,
+        hora,
+        estado,
+        observaciones: observaciones.trim(),
+      };
+
+      if (editId === null) {
+        lista.push(cita);
+      } else {
+        const idx = lista.findIndex((c) => c.id === editId);
+        if (idx >= 0) lista[idx] = cita;
+      }
+      guardarCitas(lista);
+      setCitas(lista);
+      setMensaje(editId === null ? "Cita guardada correctamente." : "Cita actualizada correctamente.");
+      resetForm();
+    } catch {
+      setMensaje("No se pudo guardar la cita en Atención Nutricional.");
     }
-    guardarCitas(lista);
-    setCitas(lista);
-    setMensaje(editId === null ? "Cita guardada correctamente." : "Cita actualizada correctamente.");
-    resetForm();
   };
 
-  const cancelarCita = (id: number) => {
+  const marcarRealizadaCita = async (backendId?: number) => {
+    if (!backendId) return;
+    try {
+      await marcarCitaRealizada(backendId);
+      const u = obtenerSesion();
+      if (u) {
+        const data = await citasPorNutricionista(u.id);
+        setCitasReales(data);
+      }
+    } catch {
+      setMensaje("No se pudo marcar la cita como realizada.");
+    }
+  };
+  const cancelarCita = async (id: number) => {
     const lista = cargarCitas();
     const idx = lista.findIndex((c) => c.id === id);
     if (idx < 0) return;
+    const backendId = lista[idx].backendId;
+    if (backendId) {
+      try {
+        await cancelarCitaBackend(backendId);
+      } catch {
+        setMensaje("No se pudo cancelar la cita en Atención Nutricional.");
+        return;
+      }
+    }
     lista[idx].estado = "Cancelada";
     guardarCitas(lista);
     setCitas(lista);
@@ -214,6 +273,54 @@ export default function EditarCitas() {
                         <button className="btn btn-outline" type="button" onClick={() => editar(c)}>Editar</button>{" "}
                         {c.estado !== "Cancelada" ? (
                           <button className="btn btn-danger" type="button" onClick={() => cancelarCita(c.id)}>Cancelar</button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+      <section className="section">
+        <div className="container">
+          <div className="section-title">
+            <h2>Citas reales de Atención Nutricional</h2>
+            <p>Listado obtenido del backend.</p>
+          </div>
+          {cargandoCitasReales ? (
+            <div className="empty">Cargando citas...</div>
+          ) : errorCitasReales ? (
+            <div className="empty">{errorCitasReales}</div>
+          ) : citasReales.length === 0 ? (
+            <div className="empty">No hay citas reales registradas.</div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Paciente</th>
+                    <th>Fecha y hora</th>
+                    <th>Motivo</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {citasReales.map((c) => (
+                    <tr key={c.id}>
+                      <td>{c.id}</td>
+                      <td>{c.pacienteId}</td>
+                      <td>{c.fechaHora}</td>
+                      <td>{c.motivo}</td>
+                      <td>{c.estado}</td>
+                      <td>
+                        {c.estado === "PROGRAMADA" ? (
+                          <button className="btn btn-outline" type="button" onClick={() => void marcarRealizadaCita(c.id)}>
+                            Realizar
+                          </button>
                         ) : null}
                       </td>
                     </tr>

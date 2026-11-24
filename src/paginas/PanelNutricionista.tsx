@@ -5,12 +5,18 @@ import { cargarUsuarios } from "../data/usuarios";
 import { cargarProductos } from "../data/productos";
 import { asegurarDemoPaciente } from "../data/demoPaciente";
 import { dinero } from "../utils/formato";
+import { planesPorNutricionista, citasPorNutricionista } from "../services/atencionService";
+import type { BackendPlanNutricional, BackendCita } from "../services/atencionService";
 
 export default function PanelNutricionista() {
   const navigate = useNavigate();
   const [nombre] = useState(() => obtenerSesion()?.nombre ?? "Carolina");
   const [pacientes] = useState(() => cargarUsuarios().filter((u) => u.rol === "Paciente"));
   const [planes] = useState(() => cargarProductos().filter((p) => p.tipo === "Plan especializado"));
+  const [planesAtencion, setPlanesAtencion] = useState<BackendPlanNutricional[]>([]);
+  const [citasAtencion, setCitasAtencion] = useState<BackendCita[]>([]);
+  const [cargandoAtencion, setCargandoAtencion] = useState(false);
+  const [errorAtencion, setErrorAtencion] = useState("");
 
   useEffect(() => {
     const u = obtenerSesion();
@@ -19,6 +25,15 @@ export default function PanelNutricionista() {
       return;
     }
     asegurarDemoPaciente();
+    setCargandoAtencion(true);
+    setErrorAtencion("");
+    Promise.all([planesPorNutricionista(u.id), citasPorNutricionista(u.id)])
+      .then(([planes, citas]) => {
+        setPlanesAtencion(planes);
+        setCitasAtencion(citas);
+      })
+      .catch(() => setErrorAtencion("No se pudo conectar con Atención Nutricional."))
+      .finally(() => setCargandoAtencion(false));
   }, [navigate]);
 
   const irA = (id: string) => {
@@ -142,9 +157,71 @@ export default function PanelNutricionista() {
         <div className="container">
           <div className="section-title">
             <h2>Citas programadas</h2>
-            <p>Próximas atenciones.</p>
+            <p>Próximas atenciones desde Atención Nutricional.</p>
           </div>
-          <div className="empty">Todavía no tienes citas programadas.</div>
+          {cargandoAtencion ? (
+            <div className="empty">Cargando citas...</div>
+          ) : errorAtencion ? (
+            <div className="empty">{errorAtencion}</div>
+          ) : citasAtencion.length === 0 ? (
+            <div className="empty">Todavía no tienes citas programadas.</div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Paciente</th>
+                    <th>Fecha y hora</th>
+                    <th>Motivo</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {citasAtencion.map((c) => (
+                    <tr key={c.id}>
+                      <td>{c.id}</td>
+                      <td>{c.pacienteId}</td>
+                      <td>{c.fechaHora}</td>
+                      <td>{c.motivo}</td>
+                      <td>{c.estado}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="section" id="planes-atencion">
+        <div className="container">
+          <div className="section-title">
+            <h2>Planes nutricionales asignados</h2>
+            <p>Planes reales desde Atención Nutricional.</p>
+          </div>
+          {cargandoAtencion ? (
+            <div className="empty">Cargando planes...</div>
+          ) : errorAtencion ? (
+            <div className="empty">{errorAtencion}</div>
+          ) : planesAtencion.length === 0 ? (
+            <div className="empty">Todavía no tienes planes asignados.</div>
+          ) : (
+            <div className="grid-3">
+              {planesAtencion.map((p) => (
+                <article className="card card-servicio" key={p.id}>
+                  <div className="card-body">
+                    <h3>{p.nombre}</h3>
+                    <p className="muted">Paciente ID: {p.pacienteId}</p>
+                    <p className="muted">Estado: {p.estado}</p>
+                    <p className="muted">Progreso: {p.progreso}%</p>
+                    <p className="muted">Inicio: {p.fechaInicio}</p>
+                    <p className="muted">Término: {p.fechaTermino}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </main>

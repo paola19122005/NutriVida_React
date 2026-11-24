@@ -5,10 +5,13 @@ import { asegurarDemoPaciente } from "../data/demoPaciente";
 import { cargarServiciosPaciente, type ServicioPaciente } from "../data/serviciosPaciente";
 
 
-import { cargarPagos } from "../data/pagos";
-import type { PagoPaciente } from "../data/pagos";
+import { historialPagosPorUsuario } from "../services/pagosService";
+import type { BackendPago } from "../services/pagosService";
 import { formatearFecha, estadoPlan, parseFechaISO, addMonths, fechaPasada, fechaISO } from "../utils/fechas";
 import { dinero } from "../utils/formato";
+import { planesPorPaciente } from "../services/atencionService";
+import { listarSeguimientos } from "../services/atencionService";
+import type { BackendPlanNutricional, BackendSeguimiento } from "../services/atencionService";
 
 interface PlanNutricional {
   id: number;
@@ -36,6 +39,37 @@ export default function PanelPaciente() {
   const navigate = useNavigate();
   const sesion = obtenerSesion();
   const [detalleId, setDetalleId] = useState<number | null>(null);
+  const [planesAtencion, setPlanesAtencion] = useState<BackendPlanNutricional[]>([]);
+  const [seguimientosPorPlan, setSeguimientosPorPlan] = useState<Record<number, BackendSeguimiento[]>>({});
+  const [cargandoPlanesAtencion, setCargandoPlanesAtencion] = useState(false);
+  const [errorPlanesAtencion, setErrorPlanesAtencion] = useState("");
+
+  useEffect(() => {
+    const u = obtenerSesion();
+    if (u?.rol === "Paciente") {
+      setCargandoPlanesAtencion(true);
+      setErrorPlanesAtencion("");
+      planesPorPaciente(u.id)
+        .then(async (planes) => {
+          setPlanesAtencion(planes);
+          const entries = await Promise.all(planes.map(async (p) => [p.id, await listarSeguimientos(p.id)] as const));
+          setSeguimientosPorPlan(Object.fromEntries(entries));
+        })
+        .catch(() => setErrorPlanesAtencion("No se pudo conectar con Atención Nutricional."))
+        .finally(() => setCargandoPlanesAtencion(false));
+    }
+  }, []);
+  useEffect(() => {
+    const u = obtenerSesion();
+    if (u?.rol !== "Paciente") return;
+    setCargandoPagos(true);
+    setErrorPagos("");
+    historialPagosPorUsuario(u.id)
+      .then((data) => setPagos(data))
+      .catch(() => setErrorPagos("No se pudo conectar con Pagos."))
+      .finally(() => setCargandoPagos(false));
+  }, []);
+
   const [categoriaActiva, setCategoriaActiva] = useState<Categoria>("agendados");
   const [servicios] = useState<ServicioPaciente[]>(() => {
     const u = obtenerSesion();
@@ -52,11 +86,9 @@ export default function PanelPaciente() {
     }
     return [];
   });
-  const [pagos] = useState<PagoPaciente[]>(() => {
-    const u = obtenerSesion();
-    if (u?.rol === "Paciente") return cargarPagos().filter((p) => p.pacienteId === u.id);
-    return [];
-  });
+  const [pagos, setPagos] = useState<BackendPago[]>([]);
+  const [cargandoPagos, setCargandoPagos] = useState(false);
+  const [errorPagos, setErrorPagos] = useState("");
 
   useEffect(() => {
     const u = obtenerSesion();
@@ -102,7 +134,7 @@ export default function PanelPaciente() {
   }
 
   const totalPendiente = porPagarServicios.reduce((acc, s) => acc + s.importe, 0);
-  const totalPagado = pagos.reduce((acc, p) => acc + p.monto, 0);
+  const totalPagado = pagos.filter((p) => p.estado === "PAGADO").reduce((acc, p) => acc + p.monto, 0);
 
   const planDetalle = detalleId ? planes.find((p) => p.id === detalleId) : null;
   const abrirDetallePlan = (planId: number) => setDetalleId(planId);
@@ -202,7 +234,7 @@ export default function PanelPaciente() {
                   <p className="muted">{s.tipo}</p>
                   <p className="muted">Monto pendiente: {dinero(s.importe)}</p>
                   <p className="muted">Pago: Pendiente</p>
-                  <Link className="btn btn-primary" to="/pago">Pagar</Link>
+                  <Link className="btn btn-primary" to="/pago" state={{ servicios: [s] }}>Pagar</Link>
                 </div>
               </article>
             ))}
@@ -234,20 +266,25 @@ export default function PanelPaciente() {
             )}
 
             <h3 style={{ marginTop: "20px" }}>Transacciones registradas</h3>
-            {pagos.length === 0 ? (
+            {cargandoPagos ? (
+              <div className="empty">Cargando pagos...</div>
+            ) : errorPagos ? (
+              <div className="empty">{errorPagos}</div>
+            ) : pagos.length === 0 ? (
               <div className="empty">No hay transacciones registradas.</div>
             ) : (
               <div className="grid-3">
                 {pagos.map((p) => (
                   <article className="card" key={p.id}>
                     <div className="card-body">
-                      <h3>{p.servicios.join(", ")}</h3>
+                      <h3>{p.servicioNombre || "Servicio"}</h3>
                       <p className="muted">Fecha: {formatearFecha(p.fecha)}</p>
                       <p className="muted">Monto: {dinero(p.monto)}</p>
-                      <p className="muted">Método de pago: {p.metodoPago}</p>
-                      {p.numeroTransaccion ? <p className="muted">Número de transacción: {p.numeroTransaccion}</p> : null}
+                      <p className="muted">MǸtodo de pago: {p.metodoPago || "No informado"}</p>
+                      {p.folio ? <p className="muted">Nǧmero de transacci��n: {p.folio}</p> : null}
                       {p.comprobante ? <p className="muted">Comprobante: {p.comprobante}</p> : null}
-                      <p className="muted">Estado: {p.estado}</p>
+                      {p.fechaPago ? <p className="muted">Fecha de pago: {formatearFecha(p.fechaPago)}</p> : null}
+                      <p className="muted">Estado: {p.estado === "PAGADO" ? "Pagado" : p.estado === "CANCELADO" ? "Cancelado" : "Pendiente"}</p>
                     </div>
                   </article>
                 ))}
@@ -275,6 +312,44 @@ export default function PanelPaciente() {
         <div className="container">
           <h1>Mi perfil</h1>
           <p>Bienvenido/a, {sesion?.nombre}. Aquí puedes consultar tus servicios y seguimiento.</p>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="container">
+          <h2>Planes nutricionales reales</h2>
+          {cargandoPlanesAtencion ? (
+            <div className="empty">Cargando planes...</div>
+          ) : errorPlanesAtencion ? (
+            <div className="empty">{errorPlanesAtencion}</div>
+          ) : planesAtencion.length === 0 ? (
+            <div className="empty">No tienes planes nutricionales registrados.</div>
+          ) : (
+            <div className="grid-3">
+              {planesAtencion.map((p) => (
+                <article className="card" key={p.id}>
+                  <div className="card-body">
+                    <h3>{p.nombre}</h3>
+                    <p className="muted">Estado: {p.estado}</p>
+                    <p className="muted">Progreso: {p.progreso}%</p>
+                    <p className="muted">Inicio: {p.fechaInicio}</p>
+                    <p className="muted">Término: {p.fechaTermino}</p>
+                    {p.descripcion ? <p className="muted">{p.descripcion}</p> : null}
+                    {seguimientosPorPlan[p.id]?.length ? (
+                      <div>
+                        <strong>Seguimientos:</strong>
+                        <ul className="list-clean">
+                          {seguimientosPorPlan[p.id].map((s) => (
+                            <li key={s.id} className="muted">{s.fechaRegistro}: {s.comentario} ({s.progreso}%)</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
