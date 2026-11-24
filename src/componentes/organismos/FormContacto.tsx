@@ -2,7 +2,7 @@ import { useState } from "react";
 import CampoFormulario from "../moleculas/CampoFormulario";
 import { validarCorreo, LIMITE_NOMBRE, LIMITE_CORREO, LIMITE_COMENTARIO } from "../../utils/validacion";
 import { Toast } from "../../utils/toast";
-import { agregarMensajeContacto } from "../../data/contactos";
+import { registrarMensajeContacto } from "../../services/contacto";
 
 export default function FormContacto() {
   const [nombre, setNombre] = useState("");
@@ -12,8 +12,10 @@ export default function FormContacto() {
   const [errores, setErrores] = useState<{ nombre?: string; correo?: string; asunto?: string; comentario?: string }>({});
   const [mensaje, setMensaje] = useState("");
   const [toast, setToast] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [errorEnvio, setErrorEnvio] = useState("");
 
-  const enviar = (e: React.FormEvent) => {
+  const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
     const nuevos: typeof errores = {};
     let ok = true;
@@ -27,18 +29,28 @@ export default function FormContacto() {
     else if (comentario.length > LIMITE_COMENTARIO) { nuevos.comentario = `Máximo ${LIMITE_COMENTARIO} caracteres.`; ok = false; }
     setErrores(nuevos);
     if (!ok) return;
-    agregarMensajeContacto({
-      remitente: nombre.trim(),
-      correo: correo.trim(),
-      asunto: asunto.trim() || "Sin asunto",
-      contenido: comentario.trim(),
-    });
-    setNombre("");
-    setCorreo("");
-    setAsunto("");
-    setComentario("");
-    setMensaje("Consulta enviada correctamente.");
-    setToast(true);
+
+    setEnviando(true);
+    setErrorEnvio("");
+    try {
+      await registrarMensajeContacto({
+        nombre: nombre.trim(),
+        correo: correo.trim(),
+        asunto: asunto.trim() || "Sin asunto",
+        mensaje: comentario.trim(),
+      });
+      setNombre("");
+      setCorreo("");
+      setAsunto("");
+      setComentario("");
+      setMensaje("Consulta enviada correctamente.");
+      setToast(true);
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message || "");
+      setErrorEnvio(msg || "No se pudo enviar la consulta. Intente nuevamente.");
+    } finally {
+      setEnviando(false);
+    }
   };
 
   return (
@@ -59,8 +71,9 @@ export default function FormContacto() {
             <textarea id="comentario" name="comentario" maxLength={LIMITE_COMENTARIO} value={comentario} onChange={(e) => { setComentario(e.target.value); setErrores((prev) => ({ ...prev, comentario: undefined })); }} />
             <span className="error">{errores.comentario ?? ""}</span>
           </div>
-          <div className="full">
-            <button className="btn btn-primary" type="submit">Enviar consulta</button>
+           <div className="full">
+            <button className="btn btn-primary" type="submit" disabled={enviando}>{enviando ? "Enviando..." : "Enviar consulta"}</button>
+            {errorEnvio ? <p className="error">{errorEnvio}</p> : null}
             <p className="success">{mensaje}</p>
           </div>
         </div>

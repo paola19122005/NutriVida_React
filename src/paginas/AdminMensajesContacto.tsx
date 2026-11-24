@@ -2,20 +2,20 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { obtenerSesion } from "../data/usuarios";
 import {
-  cargarMensajesContacto,
-  marcarMensajeContacto,
-  agregarRespuestaContacto,
-  type MensajeContacto,
-  type RespuestaContacto,
-} from "../data/contactos";
-import { enviarRespuestaContacto } from "../services/contacto";
+  listarMensajesContacto,
+  responderMensajeContacto,
+  cambiarEstadoMensajeContacto,
+  eliminarMensajeContacto,
+  type BackendMensajeContacto,
+} from "../services/contacto";
 
 export default function AdminMensajesContacto() {
   const navigate = useNavigate();
-  const [mensajes, setMensajes] = useState<MensajeContacto[]>(() => cargarMensajesContacto());
+  const [mensajes, setMensajes] = useState<BackendMensajeContacto[]>([]);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState("");
   const [seleccionadoId, setSeleccionadoId] = useState<number | null>(null);
   const [respuesta, setRespuesta] = useState("");
-  const [error, setError] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [resultadoEnvio, setResultadoEnvio] = useState("");
 
@@ -24,14 +24,27 @@ export default function AdminMensajesContacto() {
     if (!u || u.rol !== "Administrador") {
       if (u) window.alert("Esta sección requiere rol Administrador.");
       navigate(u ? "/" : "/login");
+      return;
     }
+    cargarMensajes();
   }, [navigate]);
 
-  const recargar = () => setMensajes(cargarMensajesContacto());
+  const cargarMensajes = async () => {
+    setCargando(true);
+    setError("");
+    try {
+      const data = await listarMensajesContacto();
+      setMensajes(data);
+    } catch (e: unknown) {
+      setError(String((e as { message?: string })?.message || "No se pudo cargar los mensajes."));
+    } finally {
+      setCargando(false);
+    }
+  };
 
   const seleccionado = mensajes.find((m) => m.id === seleccionadoId) ?? null;
-  const yaRespondido = (seleccionado?.respuestas.length ?? 0) > 0;
-  const puedeResponder = !!seleccionado && seleccionado.estado === "Pendiente" && !yaRespondido;
+  const yaRespondido = Boolean(seleccionado?.respuesta);
+  const puedeResponder = !!seleccionado && seleccionado.estado === "PENDIENTE" && !yaRespondido;
 
   const enviar = async () => {
     if (!seleccionado) return;
@@ -41,28 +54,37 @@ export default function AdminMensajesContacto() {
     }
     setError("");
     setEnviando(true);
-    const nueva = agregarRespuestaContacto(seleccionado.id, respuesta.trim());
-    if (nueva) {
-      marcarMensajeContacto(seleccionado.id, "Revisado");
-      const resultado = await enviarRespuestaContacto({
-        mensajeId: seleccionado.id,
-        destinatario: seleccionado.correo,
-        asunto: seleccionado.asunto,
-        contenido: respuesta.trim(),
-        fecha: nueva.fecha,
-      });
-      setResultadoEnvio(resultado.detalle);
-    } else {
-      setError("Este mensaje ya fue respondido.");
+    try {
+      const actualizado = await responderMensajeContacto(seleccionado.id, respuesta.trim());
+      setMensajes((prev) => prev.map((m) => (m.id === actualizado.id ? actualizado : m)));
+      setResultadoEnvio("Respuesta registrada correctamente.");
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message || "");
+      setError(msg || "No se pudo enviar la respuesta.");
+    } finally {
+      setRespuesta("");
+      setEnviando(false);
     }
-    setRespuesta("");
-    recargar();
-    setEnviando(false);
   };
 
-  const marcar = (id: number) => {
-    marcarMensajeContacto(id, "Revisado");
-    recargar();
+  const marcar = async (id: number) => {
+    try {
+      const actualizado = await cambiarEstadoMensajeContacto(id, "REVISADO");
+      setMensajes((prev) => prev.map((m) => (m.id === actualizado.id ? actualizado : m)));
+    } catch (e: unknown) {
+      setError(String((e as { message?: string })?.message || "No se pudo actualizar el mensaje."));
+    }
+  };
+
+  const eliminar = async (id: number) => {
+    if (!window.confirm("¿Eliminar este mensaje?")) return;
+    try {
+      await eliminarMensajeContacto(id);
+      setMensajes((prev) => prev.filter((m) => m.id !== id));
+      if (seleccionadoId === id) setSeleccionadoId(null);
+    } catch (e: unknown) {
+      setError(String((e as { message?: string })?.message || "No se pudo eliminar el mensaje."));
+    }
   };
 
   return (
@@ -78,25 +100,29 @@ export default function AdminMensajesContacto() {
         <div className="container chat-layout">
           <div className="chat-list">
             <h2>Bandeja de entrada</h2>
-            {mensajes.length === 0 ? (
+            {cargando ? (
+              <div className="empty">Cargando mensajes...</div>
+            ) : error ? (
+              <div className="empty">{error}</div>
+            ) : mensajes.length === 0 ? (
               <div className="empty">No hay mensajes de contacto.</div>
             ) : (
               <div className="chat-items">
                 {mensajes
                   .slice()
-                  .sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
+                  .sort((a, b) => (a.fechaRegistro < b.fechaRegistro ? 1 : -1))
                   .map((m) => (
                     <button
                       key={m.id}
                       type="button"
-                      aria-label={m.remitente}
+                      aria-label={m.nombre}
                       className={`chat-item ${seleccionadoId === m.id ? "chat-item-active" : ""}`}
                       onClick={() => setSeleccionadoId(m.id)}
                     >
-                      <strong>{m.remitente}</strong>
+                      <strong>{m.nombre}</strong>
                       <span className="muted">{m.correo}</span>
                       <span className="muted">{m.asunto}</span>
-                      <span className={`status ${m.estado === "Revisado" ? "status-ok" : "status-off"}`}>{m.estado}</span>
+                      <span className={`status ${m.estado === "REVISADO" || m.estado === "RESPONDIDO" ? "status-ok" : "status-off"}`}>{m.estado}</span>
                     </button>
                   ))}
               </div>
@@ -109,35 +135,34 @@ export default function AdminMensajesContacto() {
             ) : (
               <>
                 <div className="chat-header">
-                  <h2>{seleccionado.remitente}</h2>
+                  <h2>{seleccionado.nombre}</h2>
                   <p className="muted">Correo: {seleccionado.correo}</p>
                   <p className="muted">Asunto: {seleccionado.asunto}</p>
-                  <p className="muted">Recibido: {new Date(seleccionado.fecha).toLocaleString("es-CL")}</p>
+                  <p className="muted">Recibido: {new Date(seleccionado.fechaRegistro).toLocaleString("es-CL")}</p>
                   <p className="muted">
-                    Estado: <span className={`status ${seleccionado.estado === "Revisado" ? "status-ok" : "status-off"}`}>{seleccionado.estado}</span>
+                    Estado: <span className={`status ${seleccionado.estado === "REVISADO" || seleccionado.estado === "RESPONDIDO" ? "status-ok" : "status-off"}`}>{seleccionado.estado}</span>
                   </p>
                   <div className="actions">
-                    {seleccionado.estado === "Pendiente" ? (
+                    {seleccionado.estado === "PENDIENTE" ? (
                       <button className="btn btn-primary" type="button" onClick={() => marcar(seleccionado.id)}>Marcar como revisado</button>
                     ) : null}
+                    <button className="btn btn-danger" type="button" onClick={() => eliminar(seleccionado.id)}>Eliminar</button>
                   </div>
                 </div>
 
                 <div className="chat-messages">
                   <div className="chat-bubble chat-bubble-user">
-                    <strong>{seleccionado.remitente}</strong>
-                    <p>{seleccionado.contenido}</p>
-                    <small>{new Date(seleccionado.fecha).toLocaleString("es-CL")}</small>
+                    <strong>{seleccionado.nombre}</strong>
+                    <p>{seleccionado.mensaje}</p>
+                    <small>{new Date(seleccionado.fechaRegistro).toLocaleString("es-CL")}</small>
                   </div>
-                  {seleccionado.respuestas.map((r: RespuestaContacto) => (
-                    <div key={r.id} className="chat-bubble chat-bubble-admin">
-                      <strong>{r.autor}</strong>
-                      <p>{r.contenido}</p>
-                      <small>
-                        {new Date(r.fecha).toLocaleString("es-CL")} · {r.estadoEnvio === "Simulado" ? "Envío simulado" : r.estadoEnvio}
-                      </small>
+                  {seleccionado.respuesta ? (
+                    <div className="chat-bubble chat-bubble-admin">
+                      <strong>Administrador</strong>
+                      <p>{seleccionado.respuesta}</p>
+                      <small>{seleccionado.fechaRespuesta ? new Date(seleccionado.fechaRespuesta).toLocaleString("es-CL") : ""} · Enviado</small>
                     </div>
-                  ))}
+                  ) : null}
                 </div>
 
                 <div className="chat-composer">
@@ -146,7 +171,7 @@ export default function AdminMensajesContacto() {
                     onChange={(e) => setRespuesta(e.target.value)}
                     placeholder="Escribe una respuesta..."
                     rows={3}
-                    disabled={!puedeResponder}
+                    disabled={!puedeResponder || enviando}
                   />
                   {error ? <span className="error">{error}</span> : null}
                   {resultadoEnvio ? <p className="hint">{resultadoEnvio}</p> : null}
