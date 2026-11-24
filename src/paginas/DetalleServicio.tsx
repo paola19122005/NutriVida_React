@@ -53,7 +53,7 @@ export default function DetalleServicio() {
       <section className="section">
         <div className="container">
           <div className="detail-grid">
-            <img className="detail-image" src={p.imagen} alt={p.nombre} />
+            <img className="detail-image" src={p.imagen} alt={p.nombre} onError={(e) => { const img = e.currentTarget; if (img.dataset.fallbackApplied === "true") return; img.dataset.fallbackApplied = "true"; img.src = "/img/alimentos saludables.webp"; }} />
             <div className="info-box">
               <span className="badge">{p.tipo}</span>
               <h1>{p.nombre}</h1>

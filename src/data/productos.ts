@@ -29,18 +29,21 @@ export const productosIniciales: Producto[] = [
   { id: "TG003", tipo: "Taller grupal", nombre: "Taller nutrición para deportistas", duracion: "90 min", modalidad: "Presencial (grupo)", precio: 18000, descripcion: "Hidratación, nutrición pre y post entrenamiento, suplementación básica. Máx. 12 personas.", imagen: "/img/taller deportivo.jpg" },
 ];
 
+import { normalizarRutaImagen } from "../utils/imagen";
+
 const STORAGE_KEY = "productosNutriVida;"
 
 export function cargarProductos(): Producto[]{
     const guardados = localStorage.getItem(STORAGE_KEY);
     if(guardados){
         try {
-            return JSON.parse(guardados) as Producto[];
+            const parsed = JSON.parse(guardados) as Producto[];
+            return parsed.map((p) => ({ ...p, imagen: normalizarRutaImagen(p.imagen) }));
         }catch {
-            return [...productosIniciales];
+            return productosIniciales.map((p) => ({ ...p, imagen: normalizarRutaImagen(p.imagen) }));
         }
     }
-    return [...productosIniciales];
+    return productosIniciales.map((p) => ({ ...p, imagen: normalizarRutaImagen(p.imagen) }));
 }
 
 export function guardarProductos(productos: Producto[]): void{

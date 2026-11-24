@@ -10,7 +10,7 @@ interface CardBlogProps{
 export default function CardBlog({id, titulo, resumen, imagen}: CardBlogProps){
     return(
         <article className="card">
-            <img className="card-img" src={imagen} alt={titulo}/>
+            <img className="card-img" src={imagen} alt={titulo} onError={(e) => { const img = e.currentTarget; if (img.dataset.fallbackApplied === "true") return; img.dataset.fallbackApplied = "true"; img.src = "/img/alimentos saludables.webp"; }} />
             <div className="card-body">
                 <h3>{titulo}</h3>
                 <p className="muted">{resumen}</p>

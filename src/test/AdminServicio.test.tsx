@@ -82,6 +82,7 @@ describe("AdminServicios", () => {
   it("edita un servicio existente", async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><AdminServicios /></MemoryRouter>);
+    await screen.findByText("Primera consulta nutricional");
     await user.click(screen.getAllByRole("button", { name: /Editar/i })[0]);
     const nombre = screen.getByLabelText(/^Nombre$/i) as HTMLInputElement;
     await user.clear(nombre);
@@ -89,6 +90,9 @@ describe("AdminServicios", () => {
     const duracion = screen.getByLabelText(/raci/i) as HTMLInputElement;
     await user.clear(duracion);
     await user.type(duracion, "50");
+    const descripcion = screen.getByLabelText(/Descripci/i) as HTMLTextAreaElement;
+    await user.clear(descripcion);
+    await user.type(descripcion, "Descripcion valida para prueba");
     await user.click(screen.getByRole("button", { name: /Guardar servicio/i }));
     await waitFor(() => expect(screen.getByText("Servicio Editado")).toBeInTheDocument());
   });

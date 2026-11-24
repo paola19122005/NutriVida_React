@@ -141,6 +141,11 @@ export default function AdminServicios() {
       return;
     }
 
+    const imagenLimpia = imagen.trim().replace(/\\/g, "/");
+    const imagenFinal = imagenLimpia && !imagenLimpia.startsWith("/") && !/^https?:\/\//i.test(imagenLimpia)
+      ? "/" + imagenLimpia.replace(/^\.?\//, "")
+      : imagenLimpia;
+
     const obj: Producto = {
       id,
       tipo,
@@ -149,7 +154,7 @@ export default function AdminServicios() {
       modalidad: modalidadLimpia,
       precio: precioNumero,
       descripcion: descripcionLimpia,
-      imagen: imagen.trim(),
+      imagen: imagenFinal,
     };
 
     setError("");

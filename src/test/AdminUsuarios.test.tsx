@@ -50,9 +50,9 @@ describe("AdminUsuarios", () => {
     });
   });
 
-  it("lista los usuarios iniciales", () => {
+  it("lista los usuarios iniciales", async () => {
     render(<MemoryRouter><AdminUsuarios /></MemoryRouter>);
-    expect(screen.getByText(/Admin NutriVida/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Admin NutriVida/i)).toBeInTheDocument();
   });
 
   it("filtra usuarios por busqueda", async () => {
@@ -79,6 +79,7 @@ describe("AdminUsuarios", () => {
   it("edita un usuario existente", async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><AdminUsuarios /></MemoryRouter>);
+    await screen.findByText(/Admin NutriVida/i);
     await user.click(screen.getAllByRole("button", { name: /Editar/i })[0]);
     const nombre = screen.getByLabelText(/^Nombre$/i) as HTMLInputElement;
     await user.clear(nombre);
@@ -90,6 +91,7 @@ describe("AdminUsuarios", () => {
   it("desactiva y elimina un usuario", async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><AdminUsuarios /></MemoryRouter>);
+    await screen.findByText(/Admin NutriVida/i);
     await user.click(screen.getAllByRole("button", { name: /Desactivar/i })[0]);
     await waitFor(() => expect(screen.getAllByText(/Inactivo/i).length).toBeGreaterThan(0));
     const before = screen.getAllByRole("row").length;

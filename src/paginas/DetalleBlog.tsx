@@ -28,7 +28,7 @@ export default function DetalleBlog() {
       <section className="section">
         <div className="container">
           <article className="info-box">
-            <img className="detail-image" src={p.imagen} alt={p.titulo} style={{ marginBottom: "20px" }} />
+            <img className="detail-image" src={p.imagen} alt={p.titulo} style={{ marginBottom: "20px" }} onError={(e) => { const img = e.currentTarget; if (img.dataset.fallbackApplied === "true") return; img.dataset.fallbackApplied = "true"; img.src = "/img/alimentos saludables.webp"; }} />
             <span className="badge">NutriVida Blog</span>
             <h1>{p.titulo}</h1>
             <p style={{ marginTop: "15px" }}>{p.detalle}</p>

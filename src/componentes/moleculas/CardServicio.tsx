@@ -28,7 +28,7 @@ export default function CardServicio({id, tipo, nombre, descripcion, precio, dur
     return (
         <>
         <article className="card card-servicio">
-            <img className={`card-img servicio-img servicio-img-${id.toLowerCase()}`} src={imagen} alt={nombre}/>
+            <img className={`card-img servicio-img servicio-img-${id.toLowerCase()}`} src={imagen} alt={nombre} onError={(e) => { const img = e.currentTarget; if (img.dataset.fallbackApplied === "true") return; img.dataset.fallbackApplied = "true"; img.src = "/img/alimentos saludables.webp"; }} />
                 <div className="card-body">
                     <span className="badge">{tipo}</span>
                     <h3>{nombre}</h3>
