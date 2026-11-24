@@ -15,6 +15,7 @@ import {
   mapUsuario,
   type Usuario,
 } from "../services/authService";
+import { guardarSesion, cerrarSesion } from "../data/usuarios";
 
 interface AuthContextType {
   usuario: Usuario | null;
@@ -50,9 +51,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (resultado.user) {
-        setUsuario(mapUsuario(resultado.user));
+        const usuarioAutenticado = mapUsuario(resultado.user);
+        setUsuario(usuarioAutenticado);
+        guardarSesion(usuarioAutenticado);
+        setErrorConexion(false);
       } else {
         setUsuario(null);
+        cerrarSesion();
+        setErrorConexion(false);
       }
     } finally {
       setCargando(false);
@@ -71,16 +77,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const usuarioAutenticado = mapUsuario(respuesta);
 
     setUsuario(usuarioAutenticado);
+    guardarSesion(usuarioAutenticado);
     setErrorConexion(false);
 
     return usuarioAutenticado;
   };
 
   const logout = async (): Promise<void> => {
-    await logoutUsuario();
-
-    setUsuario(null);
-    setErrorConexion(false);
+    try {
+      await logoutUsuario();
+    } finally {
+      setUsuario(null);
+      cerrarSesion();
+      setErrorConexion(false);
+    }
   };
 
   return (
