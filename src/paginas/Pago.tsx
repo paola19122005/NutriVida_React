@@ -1,22 +1,45 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { cargarProductos } from "../data/productos";
 import { listarServicios } from "../services/catalogoService";
 import { dinero } from "../utils/formato";
 import { obtenerLista, marcarServiciosPagados, obtenerEstadoServicio } from "../utils/lista";
 import { obtenerSesion } from "../data/usuarios";
 import { cargarServiciosPaciente, guardarServiciosPaciente } from "../data/serviciosPaciente";
-import { agregarPago } from "../data/pagos";
+import type { ServicioPaciente } from "../data/serviciosPaciente";
+import { crearPago, marcarPagoPagado } from "../services/pagosService";
+import { HttpError } from "../services/http";
 import { Toast } from "../utils/toast";
 import CampoFormulario from "../componentes/moleculas/CampoFormulario";
 
 export default function Pago() {
-  const [ids] = useState<string[]>(obtenerLista());
-  const [productos, setProductos] = useState(() => cargarProductos());
+  const location = useLocation();
+  const serviciosPasados = (location.state as { servicios?: ServicioPaciente[] } | null)?.servicios;
+
+  const [ids] = useState<string[]>(() =>
+    serviciosPasados ? serviciosPasados.map((s) => s.servicioId) : obtenerLista()
+  );
+  const [productos, setProductos] = useState(() => {
+    if (serviciosPasados && serviciosPasados.length) {
+      return serviciosPasados.map((s) => ({
+        id: s.servicioId,
+        tipo: s.tipo,
+        nombre: s.nombre,
+        duracion: "",
+        modalidad: "",
+        precio: s.importe,
+        descripcion: s.observaciones || "",
+        imagen: "",
+      }));
+    }
+    return cargarProductos();
+  });
 
   useEffect(() => {
+    if (serviciosPasados && serviciosPasados.length) return;
     listarServicios().then((data) => { if (data && data.length) setProductos(data); }).catch(() => {});
-  }, []);
+  }, [serviciosPasados]);
+
   const seleccionados = ids
     .map((id) => productos.find((p) => p.id === id))
     .filter((p): p is NonNullable<typeof p> => Boolean(p));
@@ -38,6 +61,8 @@ export default function Pago() {
   const [procesando, setProcesando] = useState(false);
   const [exito, setExito] = useState(false);
   const [toast, setToast] = useState(false);
+  const [errorPago, setErrorPago] = useState("");
+  const [pagoCreadoId, setPagoCreadoId] = useState<number | null>(null);
 
   const validar = () => {
     const nuevos: typeof errores = {};
@@ -80,66 +105,104 @@ export default function Pago() {
     return ok;
   };
 
-  const pagar = (e: React.FormEvent) => {
+  const servicioIdNumerico = (id: string) => {
+    const valor = Number(id);
+    return Number.isFinite(valor) && Number.isInteger(valor) ? valor : undefined;
+  };
+
+  const pagar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validar()) return;
     if (pendientes.length === 0) return;
-    marcarServiciosPagados(pendientes.map((p) => p.id));
-    const sesion = obtenerSesion();
-    const pacienteId = sesion?.id ?? 0;
-    // eslint-disable-next-line react-hooks/purity
-    const numeroTransaccion = "TRX-" + Date.now();
-    const metodoPago = "Tarjeta de crédito/débito";
-    const fechaPago = new Date().toISOString().slice(0, 10);
-    // Actualizar servicios del paciente
-    const servicios = cargarServiciosPaciente();
-    pendientes.forEach((p) => {
-      const idx = servicios.findIndex((s) => s.servicioId === p.id && (pacienteId ? s.pacienteId === pacienteId : true));
-      if (idx >= 0) {
-        servicios[idx] = {
-          ...servicios[idx],
-          estadoPago: "Pagado",
-          fechaPago,
-          metodoPago,
-          numeroTransaccion,
-        };
-      } else if (pacienteId) {
-        servicios.push({
-          id: Date.now() + Math.floor(Math.random() * 1000),
-          pacienteId,
-          servicioId: p.id,
-          nombre: p.nombre,
-          tipo: p.tipo,
-          fecha: fechaPago,
-          estadoActividad: "Agendado",
-          estadoPago: "Pagado",
-          importe: p.precio,
-          fechaPago,
-          nutricionista: "Carolina Fuentes",
-          metodoPago,
-          numeroTransaccion,
-        });
-      }
-    });
-    guardarServiciosPaciente(servicios);
-
-    agregarPago({
-      pacienteId,
-      servicioIds: pendientes.map((p) => p.id),
-      servicios: pendientes.map((p) => p.nombre),
-      fecha: fechaPago,
-      monto: total,
-      metodoPago,
-      numeroTransaccion,
-      estado: "Pagado",
-    });
+    if (pendientes.some((p) => !p.precio || p.precio <= 0)) {
+      setErrorPago("No se pudo recuperar el monto del servicio seleccionado.");
+      return;
+    }
 
     setProcesando(true);
-    window.setTimeout(() => {
+    setErrorPago("");
+    const sesion = obtenerSesion();
+    if (!sesion) {
+      setErrorPago("Debe iniciar sesión para registrar el pago.");
       setProcesando(false);
+      return;
+    }
+    const metodoPago = "Tarjeta de crédito/débito";
+    const fechaPago = new Date().toISOString().slice(0, 10);
+    const numeroTransaccion = "TRX-" + Date.now();
+    let pagoCreadoLocal = pagoCreadoId;
+
+    try {
+      for (const p of pendientes) {
+        if (pagoCreadoLocal === null) {
+          const creado = await crearPago({
+            servicioId: servicioIdNumerico(p.id),
+            servicioNombre: p.nombre,
+            monto: p.precio,
+            fecha: fechaPago,
+            metodoPago,
+            observaciones: "Pago realizado desde el frontend",
+          });
+          pagoCreadoLocal = creado.id;
+          setPagoCreadoId(creado.id);
+        }
+
+        await marcarPagoPagado(pagoCreadoLocal, {
+          metodoPago,
+          comprobante: "COMP-" + pagoCreadoLocal,
+          folio: numeroTransaccion,
+        });
+      }
+
+      setPagoCreadoId(null);
+
+      marcarServiciosPagados(pendientes.map((p) => p.id));
+
+      const pacienteId = sesion?.id ?? 0;
+      const servicios = cargarServiciosPaciente();
+      pendientes.forEach((p) => {
+        const idx = servicios.findIndex((s) => s.servicioId === p.id && (pacienteId ? s.pacienteId === pacienteId : true));
+        if (idx >= 0) {
+          servicios[idx] = {
+            ...servicios[idx],
+            estadoPago: "Pagado",
+            fechaPago,
+            metodoPago,
+            numeroTransaccion,
+          };
+        } else if (pacienteId) {
+          servicios.push({
+            id: Date.now() + Math.floor(Math.random() * 1000),
+            pacienteId,
+            servicioId: p.id,
+            nombre: p.nombre,
+            tipo: p.tipo,
+            fecha: fechaPago,
+            estadoActividad: "Agendado",
+            estadoPago: "Pagado",
+            importe: p.precio,
+            fechaPago,
+            nutricionista: "Carolina Fuentes",
+            metodoPago,
+            numeroTransaccion,
+          });
+        }
+      });
+      guardarServiciosPaciente(servicios);
+
       setExito(true);
       setToast(true);
-    }, 500);
+    } catch (err) {
+      const detalle = err instanceof HttpError ? ` (${err.status}: ${err.message})` : "";
+      if (pagoCreadoLocal !== null) {
+        setErrorPago(`El pago se creó (ID ${pagoCreadoLocal}) pero no se pudo marcar como pagado.${detalle}`);
+      } else {
+        setErrorPago(`No se pudo registrar el pago.${detalle}`);
+      }
+      console.error("Error al registrar pago:", err);
+    } finally {
+      setProcesando(false);
+    }
   };
 
   return (
@@ -161,9 +224,10 @@ export default function Pago() {
                 {pendientes.map((p) => (
                   <article className="card" key={p.id}>
                     <div className="card-body">
-                      <h3>{p.nombre}</h3>
-                      <p className="muted">{p.tipo} · {p.modalidad}</p>
-                      <p className="price">{dinero(p.precio)}</p>
+                   <h3>{p.nombre}</h3>
+                   <p className="muted">{p.tipo}{p.modalidad ? ` · ${p.modalidad}` : ""}</p>
+                   {p.descripcion ? <p className="muted">{p.descripcion}</p> : null}
+                   <p className="price">{dinero(p.precio)}</p>
                       <p className="muted">Estado: {obtenerEstadoServicio(p.id)}</p>
                     </div>
                   </article>
@@ -238,9 +302,10 @@ export default function Pago() {
                     />
                   </div>
                   <div className="full">
-                    <button className="btn btn-primary" type="submit" disabled={procesando || pendientes.length === 0}>
+                    <button className="btn btn-primary" type="submit" disabled={procesando || pendientes.length === 0 || total <= 0}>
                       {procesando ? "Procesando..." : "Pagar"}
                     </button>
+                    {errorPago ? <p className="error" style={{ marginTop: "8px" }}>{errorPago}</p> : null}
                     {pendientes.length === 0 && seleccionados.length > 0 ? (
                       <p className="hint">No hay servicios pendientes de pago.</p>
                     ) : null}

@@ -16,9 +16,25 @@ describe("Pago y panel paciente", () => {
     const paciente = cargarUsuarios().find((u) => u.rol === "Paciente")!;
     guardarSesion(paciente);
     asegurarDemoPaciente();
-    agregarLista("CN002", "2027-01-10");
+    agregarLista("2", "2027-01-10");
+    vi.restoreAllMocks();
     vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.spyOn(window, "alert").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method || "GET").toUpperCase();
+      if (url.includes("/api/servicios") && method === "GET") {
+        return new Response(JSON.stringify([{ id: 2, tipo: "Consulta", nombre: "Control nutricional (seguimiento)", duracion: "30 min", modalidad: "Presencial", precio: 25000, descripcion: "Desc", imagen: "/img/y.jpg" }]), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/api/pagos") && method === "POST") {
+        const body = JSON.parse(String(init?.body || "{}"));
+        return new Response(JSON.stringify({ id: 100, usuarioId: 3, servicioId: body.servicioId, servicioNombre: body.servicioNombre, monto: body.monto, fecha: body.fecha, metodoPago: body.metodoPago, estado: "PENDIENTE", fechaRegistro: new Date().toISOString() }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.match(/\/api\/pagos\/\d+\/pagar/) && method === "PATCH") {
+        return new Response(JSON.stringify({ id: 100, estado: "PAGADO" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response("not found", { status: 404 });
+    });
   });
 
   it("paga un servicio pendiente y lo quita de pendientes", async () => {
@@ -33,7 +49,7 @@ describe("Pago y panel paciente", () => {
 
     const paciente = cargarUsuarios().find((u) => u.rol === "Paciente")!;
     const servicios = cargarServiciosPaciente().filter((s) => s.pacienteId === paciente.id);
-    const cn = servicios.find((s) => s.servicioId === "CN002");
-    expect(cn?.estadoPago).toBe("Pagado");
+    const pago = servicios.find((s) => s.servicioId === "2");
+    expect(pago?.estadoPago).toBe("Pagado");
   });
 });
