@@ -5,7 +5,19 @@ export const USUARIOS_URL =
 
 export const CATALOGO_URL =
   (import.meta as { env?: Record<string, string> }).env?.VITE_CATALOGO_URL ||
-  "http://localhost:8082";
+  "http://localhost:8092";
+
+export const ATENCION_URL =
+  (import.meta as { env?: Record<string, string> }).env?.VITE_ATENCION_URL ||
+  "http://localhost:8093";
+
+export const PAGOS_URL =
+  (import.meta as { env?: Record<string, string> }).env?.VITE_PAGOS_URL ||
+  "http://localhost:8094";
+
+export const CONTACTO_URL =
+  (import.meta as { env?: Record<string, string> }).env?.VITE_CONTACTO_URL ||
+  "http://localhost:8095";
 
 export class HttpError extends Error {
   status: number;
@@ -54,5 +66,9 @@ export async function httpRequest<T>(
     return undefined as T;
   }
 
-  return JSON.parse(texto) as T;
+  try {
+    return JSON.parse(texto) as T;
+  } catch {
+    return texto as unknown as T;
+  }
 }

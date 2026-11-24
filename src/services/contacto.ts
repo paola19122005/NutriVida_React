@@ -1,35 +1,61 @@
-export interface SolicitudEnvioRespuestaContacto {
-  mensajeId: number;
-  destinatario: string;
+import { httpRequest, CONTACTO_URL } from "./http";
+
+export type EstadoMensajeContacto = "PENDIENTE" | "REVISADO" | "RESPONDIDO" | "CERRADO";
+
+export interface BackendMensajeContacto {
+  id: number;
+  usuarioId?: number;
+  nombre: string;
+  correo: string;
   asunto: string;
-  contenido: string;
-  fecha: string;
+  mensaje: string;
+  estado: EstadoMensajeContacto;
+  respuesta?: string;
+  fechaRespuesta?: string;
+  fechaRegistro: string;
 }
 
-export interface ResultadoEnvioRespuestaContacto {
-  ok: boolean;
-  modo: "local";
-  enviado: false;
-  detalle: string;
-  contratoFuturo: {
-    metodo: "POST";
-    ruta: string;
-    cuerpo: SolicitudEnvioRespuestaContacto;
-  };
+export interface MensajeContactoRequest {
+  usuarioId?: number;
+  nombre: string;
+  correo: string;
+  asunto: string;
+  mensaje: string;
 }
 
-export async function enviarRespuestaContacto(solicitud: SolicitudEnvioRespuestaContacto): Promise<ResultadoEnvioRespuestaContacto> {
-  // Contrato preparado para futura integración con el microservicio de contacto.
-  // Mientras no exista integración real, solo se registra localmente y no se envía correo.
-  return {
-    ok: true,
-    modo: "local",
-    enviado: false,
-    detalle: "Respuesta registrada localmente. Envío de correo pendiente de integración con microservicio.",
-    contratoFuturo: {
-      metodo: "POST",
-      ruta: `/api/contacto/mensajes/${solicitud.mensajeId}/respuestas`,
-      cuerpo: solicitud,
-    },
-  };
+export interface RespuestaContactoRequest {
+  respuesta: string;
+}
+
+export async function listarMensajesContacto(): Promise<BackendMensajeContacto[]> {
+  return httpRequest<BackendMensajeContacto[]>(CONTACTO_URL, "/api/contactos", { method: "GET" });
+}
+
+export async function obtenerMensajeContacto(id: number): Promise<BackendMensajeContacto> {
+  return httpRequest<BackendMensajeContacto>(CONTACTO_URL, `/api/contactos/${id}`, { method: "GET" });
+}
+
+export async function registrarMensajeContacto(payload: MensajeContactoRequest): Promise<BackendMensajeContacto> {
+  return httpRequest<BackendMensajeContacto>(CONTACTO_URL, "/api/contactos", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function responderMensajeContacto(id: number, respuesta: string): Promise<BackendMensajeContacto> {
+  return httpRequest<BackendMensajeContacto>(CONTACTO_URL, `/api/contactos/${id}/responder`, {
+    method: "PATCH",
+    body: JSON.stringify({ respuesta }),
+  });
+}
+
+export async function cambiarEstadoMensajeContacto(id: number, estado: EstadoMensajeContacto): Promise<BackendMensajeContacto> {
+  return httpRequest<BackendMensajeContacto>(CONTACTO_URL, `/api/contactos/${id}/estado`, {
+    method: "PATCH",
+    body: JSON.stringify({ estado }),
+  });
+}
+
+export async function eliminarMensajeContacto(id: number): Promise<void> {
+  await httpRequest(CONTACTO_URL, `/api/contactos/${id}`, { method: "DELETE" });
 }

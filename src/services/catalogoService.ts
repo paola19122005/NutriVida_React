@@ -1,5 +1,6 @@
 import { httpRequest, CATALOGO_URL } from "./http";
 import type { Producto } from "../data/productos";
+import { normalizarRutaImagen } from "../utils/imagen";
 
 export interface BackendServicio {
   id: number;
@@ -21,7 +22,7 @@ export function mapServicio(s: BackendServicio): Producto {
     modalidad: s.modalidad,
     precio: Number(s.precio),
     descripcion: s.descripcion,
-    imagen: s.imagen,
+    imagen: normalizarRutaImagen(s.imagen),
   };
 }
 
